@@ -1,0 +1,12 @@
+# Entornos y secretos
+.env
+**/env.js
+backend/.env
+frontend/.env
+
+# Dependencias y compilaciones
+node_modules/
+**/node_modules/
+target/
+**/target/
+dist/
