@@ -9,17 +9,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  ArrowRight,
-  Lock,
   Loader2,
   Sparkles,
-  ExternalLink,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
-import BiometricCamera from '../componente/BiometricCamera';
 import FingerprintCapture from '../componente/FingerprintCapture';
+import EnrolamientoHincha from '../registro/EnrolamientoHincha';
+import { enmascararDocumento, enmascararCorreo } from '../registro/formato';
 
-export default function Usuario({ currentUser, onOpenTerms }) {
+export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
   const [portal, setPortal] = useState({
     usuario: currentUser,
     hincha: null,
@@ -30,38 +28,9 @@ export default function Usuario({ currentUser, onOpenTerms }) {
   });
   const [activeTab, setActiveTab] = useState('credencial');
   const [loading, setLoading] = useState(true);
+  const [cargaInicial, setCargaInicial] = useState(true);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-
-  // Estados del Flujo de Enrolamiento Paso a Paso (cuando hincha es null o quiere actualizar)
-  const [onboardingStep, setOnboardingStep] = useState(1); // 1: Terminos, 2: Captura, 3: Verificando, 4: Exito
-  const [verificationProgress, setVerificationProgress] = useState(0);
-  const [verificationCheckpoints, setVerificationCheckpoints] = useState([
-    { label: 'Cotejando Cédula y datos identificatorios...', done: false },
-    { label: 'Analizando prueba de vida y calidad de vector biométrico...', done: false },
-    { label: 'Consultando antecedentes de Derecho de Admisión (Ley N° 19.327)...', done: false },
-    { label: 'Generando token biométrico cifrado con AES-256-GCM...', done: false },
-  ]);
-
-  // Formulario Biométrico
-  const [bioForm, setBioForm] = useState({
-    tipoDocumento: 'CEDULA_CHILE',
-    numeroDocumento: currentUser?.rutDecrypted || '',
-    telefono: currentUser?.telefonoDecrypted || '',
-    nombres: currentUser?.nombreCompleto?.split(' ')[0] || '',
-    apellidos: currentUser?.nombreCompleto?.split(' ').slice(1).join(' ') || '',
-    fechaNacimiento: '1996-05-15',
-    nacionalidad: 'Chilena',
-    aceptaTerminosGenerales: false,
-    aceptaTratamientoBiometrico: false,
-    fotoDocumentoBase64: '',
-    selfieBase64: '',
-    descriptorFacialJson: '',
-    huellaCredentialId: '',
-    huellaPublicKey: '',
-    huellaDispositivoTipo: '',
-    huellaDedo: 'INDICE_DERECHO',
-  });
 
   // Soporte para agregar múltiples huellas (dedos alternativos)
   const [showAddHuella, setShowAddHuella] = useState(false);
@@ -79,22 +48,11 @@ export default function Usuario({ currentUser, onOpenTerms }) {
     try {
       const data = await apiFetch('/api/hincha/perfil');
       setPortal(data);
-      if (data.hincha && data.hincha.estadoEnrolamiento === 'COMPLETADO') {
-        setOnboardingStep(4);
-      }
-      if (data.usuario) {
-        setBioForm((prev) => ({
-          ...prev,
-          numeroDocumento: prev.numeroDocumento || data.usuario.rutDecrypted || '',
-          telefono: prev.telefono || data.usuario.telefonoDecrypted || '',
-          nombres: prev.nombres || data.usuario.nombreCompleto?.split(' ')[0] || '',
-          apellidos: prev.apellidos || data.usuario.nombreCompleto?.split(' ').slice(1).join(' ') || '',
-        }));
-      }
     } catch (e) {
       setErr(e.message);
     } finally {
       setLoading(false);
+      setCargaInicial(false);
     }
   };
 
@@ -111,7 +69,7 @@ export default function Usuario({ currentUser, onOpenTerms }) {
           dedoIndice: nuevaHuellaDedo,
         }),
       });
-      setMsg(`✓ Huella para ${nuevaHuellaDedo.replace('_', ' ')} registrada y cifrada con éxito.`);
+      setMsg('Huella agregada.');
       setShowAddHuella(false);
       cargarPortal();
     } catch (e) {
@@ -124,85 +82,6 @@ export default function Usuario({ currentUser, onOpenTerms }) {
   useEffect(() => {
     cargarPortal();
   }, []);
-
-  // Animación del Paso 3: "Estamos Verificando sus Datos..."
-  const iniciarVerificacionEnTiempoReal = async () => {
-    setOnboardingStep(3);
-    setVerificationProgress(15);
-    setErr('');
-
-    // Checkpoint 1: Cotejo de identidad
-    setTimeout(() => {
-      setVerificationProgress(40);
-      setVerificationCheckpoints((prev) => [
-        { ...prev[0], done: true },
-        prev[1],
-        prev[2],
-        prev[3],
-      ]);
-    }, 700);
-
-    // Checkpoint 2: Prueba de vida y vector
-    setTimeout(() => {
-      setVerificationProgress(70);
-      setVerificationCheckpoints((prev) => [
-        prev[0],
-        { ...prev[1], done: true },
-        prev[2],
-        prev[3],
-      ]);
-    }, 1500);
-
-    // Checkpoint 3: Derecho de admisión
-    setTimeout(() => {
-      setVerificationProgress(90);
-      setVerificationCheckpoints((prev) => [
-        prev[0],
-        prev[1],
-        { ...prev[2], done: true },
-        prev[3],
-      ]);
-    }, 2200);
-
-    // Checkpoint 4: Guardar en backend y cifrar AES-256-GCM
-    setTimeout(async () => {
-      try {
-        await apiFetch('/api/hincha/biometria', {
-          method: 'POST',
-          body: JSON.stringify(bioForm),
-        });
-
-        if (bioForm.huellaCredentialId) {
-          await apiFetch('/api/hincha/huella', {
-            method: 'POST',
-            body: JSON.stringify({
-              credentialId: bioForm.huellaCredentialId,
-              publicKey: bioForm.huellaPublicKey,
-              dispositivoTipo: bioForm.huellaDispositivoTipo,
-              dedoIndice: bioForm.huellaDedo,
-            }),
-          });
-        }
-
-        setVerificationProgress(100);
-        setVerificationCheckpoints((prev) => [
-          prev[0],
-          prev[1],
-          prev[2],
-          { ...prev[3], done: true },
-        ]);
-
-        setTimeout(() => {
-          setOnboardingStep(4);
-          setMsg('¡Identidad y Biometría verificadas exitosamente en el RNH! Tu credencial ha sido activada.');
-          cargarPortal();
-        }, 600);
-      } catch (e) {
-        setErr(e.message);
-        setOnboardingStep(2);
-      }
-    }, 2800);
-  };
 
   const handleEnviarArco = async (e) => {
     e.preventDefault();
@@ -224,6 +103,26 @@ export default function Usuario({ currentUser, onOpenTerms }) {
   const hincha = portal.hincha;
   const isEnrolled = hincha && hincha.estadoEnrolamiento === 'COMPLETADO';
 
+  if (cargaInicial) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center" role="status">
+        <Loader2 className="size-8 animate-spin text-blue-700 motion-reduce:animate-none" aria-hidden="true" />
+        <span className="sr-only">Cargando tu cuenta…</span>
+      </div>
+    );
+  }
+
+  if (!isEnrolled && !err) {
+    return (
+      <EnrolamientoHincha
+        usuario={portal.usuario || currentUser}
+        onTerminado={cargarPortal}
+        onOpenTerms={onOpenTerms}
+        onCerrar={onLogout}
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Alertas */}
@@ -244,360 +143,6 @@ export default function Usuario({ currentUser, onOpenTerms }) {
         </div>
       )}
 
-      {/* CASO A: USUARIO NUEVO O PENDIENTE DE ENROLAMIENTO -> ASISTENTE PASO A PASO */}
-      {!isEnrolled && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-          {/* Header del Asistente */}
-          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-8 border-b border-slate-800">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  PROCESO OFICIAL DE ENROLAMIENTO BIOMÉTRICO (RNH)
-                </span>
-                <h1 className="text-2xl font-extrabold">
-                  ¡Hola, {portal.usuario?.nombreCompleto || 'Hincha'}! Completa tu Verificación
-                </h1>
-                <p className="text-xs text-slate-300 max-w-2xl">
-                  Para poder comprar entradas y acceder a los estadios del fútbol profesional chileno,
-                  la Ley N° 19.327 exige validar tu identidad y generar tu pase biométrico digital.
-                </p>
-              </div>
-
-              {/* Indicador de Pasos */}
-              <div className="flex items-center gap-2 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 self-start sm:self-auto text-xs font-bold">
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                  1. Términos
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 2 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                  2. Biometría
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 3 ? 'bg-amber-600 text-white animate-pulse' : 'text-slate-400'}`}>
-                  3. Verificación
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 4 ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>
-                  4. Habilitado
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 sm:p-8">
-            {/* ETAPA 1: DATOS DE IDENTIDAD, TÉRMINOS Y CONSENTIMIENTO BIOMÉTRICO */}
-            {onboardingStep === 1 && (
-              <div className="space-y-6 max-w-3xl mx-auto text-xs">
-                <div className="space-y-2">
-                  <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                    <Scale className="w-5 h-5 text-blue-600" />
-                    Paso 1: Datos de Identidad y Consentimiento Legal ANFP
-                  </h2>
-                  <p className="text-slate-600 leading-relaxed text-sm">
-                    {portal.usuario?.googleSub ? (
-                      <span className="inline-flex items-center gap-1.5 text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                        ✓ Autenticado con tu cuenta de Google ({portal.usuario?.email}). Tus nombres están precargados.
-                      </span>
-                    ) : (
-                      'Valida tus datos identificatorios para asociar tu cédula al Registro Nacional de Hinchas.'
-                    )}
-                  </p>
-                </div>
-
-                {/* Formulario de Cédula/Pasaporte y Teléfono */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    Completa tus Datos Identificatorios (Requerido por Ley N° 19.327)
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Tipo de Documento *
-                      </label>
-                      <select
-                        value={bioForm.tipoDocumento}
-                        onChange={(e) => setBioForm({ ...bioForm, tipoDocumento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white font-medium"
-                      >
-                        <option value="CEDULA_CHILE">Cédula de Identidad (RUT Chileno)</option>
-                        <option value="PASAPORTE">Pasaporte Extranjero</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Número de Documento (RUT o Pasaporte) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej: 18.543.210-K o Pasaporte"
-                        value={bioForm.numeroDocumento}
-                        onChange={(e) => setBioForm({ ...bioForm, numeroDocumento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Teléfono Móvil (Contacto Oficial) *
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="+56912345678"
-                        value={bioForm.telefono}
-                        onChange={(e) => setBioForm({ ...bioForm, telefono: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Fecha de Nacimiento *
-                      </label>
-                      <input
-                        type="date"
-                        value={bioForm.fechaNacimiento}
-                        onChange={(e) => setBioForm({ ...bioForm, fechaNacimiento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
-                    <div className="font-bold text-blue-900 text-sm">Zero-Retention</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      El sistema <strong>no almacena tus fotos</strong>. Las imágenes se procesan en
-                      memoria para extraer un vector matemático cifrado y luego se descartan de inmediato.
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1">
-                    <div className="font-bold text-emerald-900 text-sm">Cifrado AES-256-GCM</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      Tus datos biométricos y Cédula viajan encriptados de extremo a extremo y se
-                      guardan en PostgreSQL en servidores ubicados en Chile (GCP).
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1">
-                    <div className="font-bold text-amber-900 text-sm">Derechos ARCO</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      Puedes acceder, rectificar o cancelar tus datos gratuitamente en cualquier
-                      momento contactando al Delegado de Protección de Datos (DPO).
-                    </p>
-                  </div>
-                </div>
-
-                {/* Casillas de Consentimiento Obligatorias */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5">
-                  <div className="font-bold text-slate-800 text-sm">
-                    Aceptación Expresa Obligatoria (Cláusula Primera del RNH)
-                  </div>
-
-                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-white border border-slate-200 cursor-pointer shadow-sm hover:border-blue-400 transition">
-                    <input
-                      type="checkbox"
-                      checked={bioForm.aceptaTerminosGenerales}
-                      onChange={(e) =>
-                        setBioForm({ ...bioForm, aceptaTerminosGenerales: e.target.checked })
-                      }
-                      className="mt-0.5 w-4 h-4 accent-blue-600"
-                    />
-                    <span className="text-slate-700 leading-relaxed">
-                      He leído y <strong>Acepto los Términos y Condiciones Generales</strong> del
-                      Registro Nacional de Hinchas (RNH) regulados por la Asociación Nacional de Fútbol
-                      Profesional (ANFP).{' '}
-                      <button
-                        type="button"
-                        onClick={onOpenTerms}
-                        className="text-blue-600 font-bold underline inline-flex items-center gap-1"
-                      >
-                        Ver contrato legal completo <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-white border border-slate-200 cursor-pointer shadow-sm hover:border-emerald-400 transition">
-                    <input
-                      type="checkbox"
-                      checked={bioForm.aceptaTratamientoBiometrico}
-                      onChange={(e) =>
-                        setBioForm({ ...bioForm, aceptaTratamientoBiometrico: e.target.checked })
-                      }
-                      className="mt-0.5 w-4 h-4 accent-emerald-600"
-                    />
-                    <span className="text-slate-700 leading-relaxed">
-                      <strong>Acepto expresamente el uso de mis datos biométricos</strong> (rostro y
-                      huella digital) para la generación de vectores cifrados, validación en torniquetes
-                      de acceso a estadios y corroboración del Derecho de Admisión (Ley N° 19.327).
-                    </span>
-                  </label>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                  <span className="text-[11px] text-slate-500 text-center sm:text-left">
-                    {!bioForm.numeroDocumento?.trim()
-                      ? '⚠️ Ingresa tu Cédula de Identidad o Pasaporte para continuar'
-                      : !bioForm.telefono?.trim()
-                      ? '⚠️ Ingresa tu número de Teléfono Móvil'
-                      : !bioForm.aceptaTerminosGenerales || !bioForm.aceptaTratamientoBiometrico
-                      ? '⚠️ Debes marcar las dos casillas de aceptación de términos'
-                      : '✓ Datos y consentimientos listos para captura'}
-                  </span>
-
-                  <button
-                    type="button"
-                    disabled={
-                      !bioForm.numeroDocumento?.trim() ||
-                      !bioForm.telefono?.trim() ||
-                      !bioForm.aceptaTerminosGenerales ||
-                      !bioForm.aceptaTratamientoBiometrico
-                    }
-                    onClick={() => setOnboardingStep(2)}
-                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 transition"
-                  >
-                    Continuar a la Captura Biométrica
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ETAPA 2: CAPTURA FACIAL (LIVENESS) Y HUELLA DIGITAL */}
-            {onboardingStep === 2 && (
-              <div className="space-y-6 max-w-4xl mx-auto text-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                      <ScanFace className="w-5 h-5 text-blue-600" />
-                      Paso 2: Captura Biométrica Facial en Vivo y Huella Digital
-                    </h2>
-                    <p className="text-slate-500 text-sm">
-                      Sitúate frente a la cámara web o móvil para validar tu rostro con prueba de vida.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setOnboardingStep(1)}
-                    className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-                  >
-                    ← Volver a Términos
-                  </button>
-                </div>
-
-                {/* Cámara Biométrica */}
-                <BiometricCamera
-                  mode="ENROLL"
-                  onCaptureComplete={(cap) => {
-                    setBioForm((prev) => ({
-                      ...prev,
-                      selfieBase64: cap.selfieBase64,
-                      fotoDocumentoBase64: cap.fotoDocumentoBase64,
-                      descriptorFacialJson: cap.descriptorFacialJson,
-                    }));
-                  }}
-                />
-
-                {/* Huella Digital */}
-                <FingerprintCapture
-                  onFingerprintCaptured={(fp) => {
-                    setBioForm((prev) => ({
-                      ...prev,
-                      huellaCredentialId: fp.credentialId,
-                      huellaPublicKey: fp.publicKey,
-                      huellaDispositivoTipo: fp.dispositivoTipo,
-                      huellaDedo: fp.dedoIndice,
-                    }));
-                  }}
-                />
-
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="text-slate-500">
-                    {bioForm.descriptorFacialJson ? (
-                      <span className="text-emerald-600 font-bold flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" /> Vector biométrico facial listo para cotejo
-                      </span>
-                    ) : (
-                      <span className="text-amber-600 font-semibold">
-                        Captura tu rostro en vivo o presiona "Generar Vector Asistido" para continuar.
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!bioForm.descriptorFacialJson && !bioForm.selfieBase64}
-                    onClick={iniciarVerificacionEnTiempoReal}
-                    className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-xl flex items-center gap-2 transition"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Iniciar Verificación de Identidad con la ANFP
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ETAPA 3: "ESTAMOS VERIFICANDO SUS DATOS..." (PANTALLA DE PROCESAMIENTO ACTIVO) */}
-            {onboardingStep === 3 && (
-              <div className="py-14 max-w-xl mx-auto text-center space-y-8">
-                <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full border-4 border-blue-200 animate-ping opacity-30" />
-                  <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-2xl">
-                    <Loader2 className="w-10 h-10 animate-spin" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold uppercase tracking-wider">
-                    En Tiempo Real
-                  </span>
-                  <h2 className="text-2xl font-extrabold text-slate-900">
-                    Estamos verificando tu identidad...
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto">
-                    Por favor espera unos segundos mientras nos comunicamos con los servidores
-                    oficiales de la ANFP y verificamos tus antecedentes en el Registro Nacional de Hinchas.
-                  </p>
-                </div>
-
-                {/* Barra de Progreso */}
-                <div className="space-y-2">
-                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
-                    <div
-                      className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full transition-all duration-500 ease-out"
-                      style={{ width: `${verificationProgress}%` }}
-                    />
-                  </div>
-                  <div className="text-right text-xs font-mono font-bold text-slate-500">
-                    {verificationProgress}%
-                  </div>
-                </div>
-
-                {/* Checkpoints Animados */}
-                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left space-y-3 text-xs">
-                  {verificationCheckpoints.map((cp, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <span className={cp.done ? 'text-slate-900 font-bold' : 'text-slate-400'}>
-                        {cp.label}
-                      </span>
-                      {cp.done ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* CASO B: USUARIO YA VERIFICADO Y ENROLADO (CREDENCIAL DIGITAL ACTIVA) */}
       {isEnrolled && (
@@ -606,54 +151,51 @@ export default function Usuario({ currentUser, onOpenTerms }) {
           <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-800 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             <div className="lg:col-span-8 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1">
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-sm font-semibold flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4" />
-                  IDENTIDAD BIOMÉTRICA VERIFICADA • CREDENCIAL RNH ACTIVA
+                  Registro activo
                 </span>
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold">
-                  Recinto: {portal.usuario?.tenantNombre || 'ANFP Central'}
+                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 text-sm">
+                  {portal.usuario?.tenantNombre || 'ANFP Central'}
                 </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold">
                 {portal.usuario?.nombreCompleto}
               </h1>
-              <p className="text-xs text-slate-300">
-                Email: {portal.usuario?.email} • Cédula Cifrada (AES-256-GCM):{' '}
-                <span className="font-mono font-bold text-white">
-                  {hincha?.documentoDecrypted || portal.usuario?.rutDecrypted}
+              <p className="text-sm text-slate-300 tabular-nums">
+                {enmascararCorreo(portal.usuario?.email || '')}
+                {' · '}
+                <span className="text-white">
+                  {enmascararDocumento(hincha?.documentoDecrypted || portal.usuario?.rutDecrypted || '')}
                 </span>
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                 <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Estado RNH</div>
-                  <div className="text-xs font-extrabold text-emerald-400 mt-0.5">
-                    {hincha.estadoEnrolamiento}
+                  <div className="text-xs text-slate-400">Registro</div>
+                  <div className="text-sm font-semibold text-emerald-400 mt-0.5">Completo</div>
+                </div>
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                  <div className="text-xs text-slate-400">Foto de tu cara</div>
+                  <div className="text-sm font-semibold text-white mt-0.5">
+                    {hincha.livenessPassed ? 'Verificada' : 'Pendiente'}
                   </div>
                 </div>
                 <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Token Biométrico</div>
-                  <div className="text-xs font-mono font-bold text-blue-300 mt-0.5 truncate">
-                    {hincha.biometricTokenRef}
+                  <div className="text-xs text-slate-400">Huellas</div>
+                  <div className="text-sm font-semibold text-white mt-0.5">
+                    {portal.huellas.length === 0 ? 'Ninguna' : portal.huellas.length}
                   </div>
                 </div>
                 <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Prueba de Vida</div>
-                  <div className="text-xs font-bold text-white mt-0.5">
-                    {hincha.livenessPassed
-                      ? `Verificada (${(hincha.livenessScore * 100).toFixed(1)}%)`
-                      : 'Pendiente'}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Derecho Admisión</div>
+                  <div className="text-xs text-slate-400">Ingreso a estadios</div>
                   <div
-                    className={`text-xs font-extrabold mt-0.5 ${
+                    className={`text-sm font-semibold mt-0.5 ${
                       hincha.tieneProhibicionActiva ? 'text-red-400' : 'text-emerald-400'
                     }`}
                   >
-                    {hincha.tieneProhibicionActiva ? 'BLOQUEADO (LEY 19.327)' : 'HABILITADO PARA ESTADIOS'}
+                    {hincha.tieneProhibicionActiva ? 'Con prohibición' : 'Habilitado'}
                   </div>
                 </div>
               </div>
@@ -667,14 +209,14 @@ export default function Usuario({ currentUser, onOpenTerms }) {
               <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-500 to-blue-600 flex items-center justify-center shadow-lg">
                 <ScanFace className="w-14 h-14 text-white" />
               </div>
-              <div className="text-xs font-bold text-emerald-400">
-                Vector Facial + Huella Vinculados
+              <div className="text-sm font-semibold text-emerald-400">
+                Mira a la cámara en la entrada
               </div>
               <button
                 onClick={cargarPortal}
                 className="text-[11px] text-slate-400 hover:text-white inline-flex items-center gap-1"
               >
-                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Sincronizar Estado
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Actualizar
               </button>
             </div>
           </div>
@@ -839,11 +381,8 @@ export default function Usuario({ currentUser, onOpenTerms }) {
                   <div className="flex items-center justify-between">
                     <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-blue-600" />
-                      Registrar Nueva Huella Digital (FIDO2 / WebAuthn)
+                      Agregar otra huella
                     </h4>
-                    <span className="text-[11px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-lg">
-                      Sensor FIDO2
-                    </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -866,7 +405,7 @@ export default function Usuario({ currentUser, onOpenTerms }) {
                     </div>
 
                     <div className="text-[11px] text-slate-500 flex items-center">
-                      Presiona el botón de abajo y coloca tu dedo sobre el sensor de tu teléfono o lector biométrico FIDO2. La clave pública se encriptará con AES-256-GCM.
+                      Toca el botón de abajo y pon tu dedo en el lector de huella de tu celular.
                     </div>
                   </div>
 
@@ -875,7 +414,7 @@ export default function Usuario({ currentUser, onOpenTerms }) {
                   />
                   {huellaSaving && (
                     <div className="text-center text-xs text-blue-600 font-bold flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando y cifrando huella en PostgreSQL...
+                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando tu huella…
                     </div>
                   )}
                 </div>
@@ -898,16 +437,9 @@ export default function Usuario({ currentUser, onOpenTerms }) {
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           {h.dedoIndice ? h.dedoIndice.replace('_', ' ') : 'HUELLA REGISTRADA'}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                          AES-256-GCM
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-xs">
+                          Activa
                         </span>
-                      </div>
-                      <div className="font-mono text-[11px] text-slate-600 truncate">
-                        ID: {h.credentialId}
-                      </div>
-                      <div className="text-slate-500 text-[11px] flex items-center justify-between">
-                        <span>Dispositivo: {h.dispositivoTipo}</span>
-                        <span className="text-emerald-700 font-bold">Activa para Acceso</span>
                       </div>
                     </div>
                   ))

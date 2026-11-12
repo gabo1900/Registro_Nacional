@@ -18,13 +18,12 @@ import Navbar from './componente/Navbar';
 import Header from './componente/Header';
 import Footer from './componente/Footer';
 import TermsModal from './componente/TermsModal';
-import BiometricCamera from './componente/BiometricCamera';
-import FingerprintCapture from './componente/FingerprintCapture';
 import GoogleAuthButton from './componente/GoogleAuthButton';
 
 import SuperAdministrador from './rol/SuperAdministrador';
 import Administrador from './rol/Administrador';
 import Usuario from './rol/Usuario';
+import RegistroCuenta from './registro/RegistroCuenta';
 
 import { TERMINOS_SECCIONES, ESPECIFICACION_ARQUITECTURA } from './data/terminosAnfp';
 import { apiFetch } from './services/api';
@@ -43,29 +42,6 @@ export default function App() {
   });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
-
-  // Registration / Enrolment State
-  const [registerForm, setRegisterForm] = useState({
-    tenantCodigo: 'estadio-municipal',
-    nombres: '',
-    apellidos: '',
-    tipoDocumento: 'CEDULA_CHILE',
-    numeroDocumento: '',
-    fechaNacimiento: '1997-04-12',
-    nacionalidad: 'Chilena',
-    email: '',
-    telefono: '+569',
-    password: '',
-    aceptaTerminosGenerales: false,
-    aceptaTratamientoBiometrico: false,
-    fotoDocumentoBase64: '',
-    selfieBase64: '',
-    descriptorFacialJson: '',
-    huellaCredentialId: '',
-    huellaPublicKey: '',
-    huellaDispositivoTipo: '',
-    huellaDedo: 'INDICE_DERECHO',
-  });
 
   useEffect(() => {
     apiFetch('/api/public/tenants')
@@ -89,6 +65,12 @@ export default function App() {
     }
   }, []);
 
+  const iniciarSesion = (res) => {
+    localStorage.setItem('rnh_jwt_token', res.accessToken);
+    setCurrentUser(res.usuario);
+    setActiveScreen('panel');
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -98,9 +80,7 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(loginForm),
       });
-      localStorage.setItem('rnh_jwt_token', res.accessToken);
-      setCurrentUser(res.usuario);
-      setActiveScreen('panel');
+      iniciarSesion(res);
     } catch (err) {
       setAuthError(err.message);
     } finally {
@@ -117,36 +97,7 @@ export default function App() {
         body: JSON.stringify({
           credential,
           tokenType,
-          tenantCodigo:
-            loginForm.tenantCodigo !== 'TODOS'
-              ? loginForm.tenantCodigo
-              : registerForm.tenantCodigo,
-        }),
-      });
-      localStorage.setItem('rnh_jwt_token', res.accessToken);
-      setCurrentUser(res.usuario);
-      setActiveScreen('panel');
-    } catch (err) {
-      setAuthError(err.message);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthLoading(true);
-    try {
-      const res = await apiFetch('/api/auth/register-basic', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenantCodigo: registerForm.tenantCodigo,
-          nombreCompleto: `${registerForm.nombres} ${registerForm.apellidos}`.trim(),
-          rut: registerForm.numeroDocumento,
-          telefono: registerForm.telefono,
-          email: registerForm.email,
-          password: registerForm.password,
+          tenantCodigo: loginForm.tenantCodigo !== 'TODOS' ? loginForm.tenantCodigo : undefined,
         }),
       });
       localStorage.setItem('rnh_jwt_token', res.accessToken);
@@ -399,186 +350,17 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. PANTALLA PÚBLICA DE REGISTRO INICIAL (PASO 1: DATOS BÁSICOS) */}
+        {/* 3. REGISTRO DE HINCHAS: un paso por pantalla, pensado para celular */}
         {activeScreen === 'register' && (
-          <div className="max-w-xl mx-auto px-4 py-12">
-            <div className="bg-white rounded-3xl p-7 sm:p-9 border border-slate-200 shadow-xl space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-red-600 to-blue-600 text-white flex items-center justify-center shadow-md">
-                  <ShieldCheck className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-200 inline-block">
-                  Paso 1 de 2: Registro de Cuenta
-                </span>
-                <h2 className="text-2xl font-extrabold text-slate-900">
-                  Crear Cuenta en el RNH Chile
-                </h2>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Ingresa tus datos personales básicos para crear tu cuenta. Una vez dentro de tu panel,
-                  completaremos la aceptación de términos y la verificación biométrica oficial.
-                </p>
-              </div>
-
-              {authError && (
-                <div className="bg-red-50 border border-red-200 text-red-800 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                  <span>{authError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleRegisterSubmit} className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Estadio / Recinto Deportivo Principal *
-                  </label>
-                  <select
-                    value={registerForm.tenantCodigo}
-                    onChange={(e) =>
-                      setRegisterForm({ ...registerForm, tenantCodigo: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white font-semibold"
-                  >
-                    {publicTenants.map((t) => (
-                      <option key={t.id} value={t.codigo}>
-                        {t.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Nombres *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: Gabriel"
-                      value={registerForm.nombres}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, nombres: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Apellidos *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: Yáñez"
-                      value={registerForm.apellidos}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, apellidos: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      Cédula de Identidad (RUT) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="18.543.210-K"
-                      value={registerForm.numeroDocumento}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, numeroDocumento: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Teléfono Móvil *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="+56912345678"
-                      value={registerForm.telefono}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, telefono: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Correo Electrónico *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="usuario@correo.cl"
-                    value={registerForm.email}
-                    onChange={(e) =>
-                      setRegisterForm({ ...registerForm, email: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Contraseña de Acceso (se encripta con Hash PBKDF2) *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Mínimo 4 caracteres"
-                    value={registerForm.password}
-                    onChange={(e) =>
-                      setRegisterForm({ ...registerForm, password: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5"
-                  />
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600">
-                  <p>
-                    🔒 <strong>Seguridad End-to-End:</strong> Tus datos se almacenan cifrados. Al
-                    continuar, serás dirigido automáticamente a tu panel privado para realizar la
-                    validación biométrica facial requerida por la Ley N° 19.327.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-white font-extrabold text-sm shadow-lg transition"
-                >
-                  {authLoading
-                    ? 'Creando Cuenta Segura...'
-                    : 'Crear Cuenta y Continuar a Verificación →'}
-                </button>
-              </form>
-
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-200" />
-                <span className="flex-shrink mx-3 text-[11px] font-bold uppercase text-slate-400">
-                  O Regístrate con tu Cuenta Google
-                </span>
-                <div className="flex-grow border-t border-slate-200" />
-              </div>
-
-              <GoogleAuthButton onGoogleTokenReceived={handleGoogleLogin} />
-
-              <div className="text-center text-xs text-slate-500 pt-1">
-                ¿Ya tienes una cuenta creada?{' '}
-                <button
-                  type="button"
-                  onClick={() => setActiveScreen('login')}
-                  className="font-bold text-blue-600 hover:underline"
-                >
-                  Inicia sesión aquí
-                </button>
-              </div>
-            </div>
-          </div>
+          <RegistroCuenta
+            estadios={publicTenants}
+            onCerrar={() => setActiveScreen('landing')}
+            onIrLogin={() => {
+              setAuthError('');
+              setActiveScreen('login');
+            }}
+            onAutenticado={iniciarSesion}
+          />
         )}
 
         {/* 4. ROLE-SEPARATED PANELS (SUPER_ADMIN, ADMIN_TENANT, USUARIO) */}
@@ -593,6 +375,7 @@ export default function App() {
               <Usuario
                 currentUser={currentUser}
                 onOpenTerms={() => setTermsModalOpen(true)}
+                onLogout={handleLogout}
               />
             )}
           </>
@@ -606,13 +389,6 @@ export default function App() {
       <TermsModal
         isOpen={termsModalOpen}
         onClose={() => setTermsModalOpen(false)}
-        onAcceptTerms={() => {
-          setRegisterForm((prev) => ({
-            ...prev,
-            aceptaTerminosGenerales: true,
-            aceptaTratamientoBiometrico: true,
-          }));
-        }}
       />
     </div>
   );

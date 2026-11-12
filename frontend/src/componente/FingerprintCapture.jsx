@@ -25,7 +25,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
 
   const handleWebAuthnHardwareScan = async () => {
     setStatus('SCANNING');
-    setInfoMessage('Coloque su dedo en el lector biométrico del dispositivo (WebAuthn FIDO2)...');
+    setInfoMessage('Pon tu dedo en el lector de huella…');
 
     try {
       if (window.PublicKeyCredential && navigator.credentials) {
@@ -71,7 +71,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
           };
           setCredentialData(payload);
           setStatus('DONE');
-          setInfoMessage('Huella verificada por hardware y cifrada con éxito.');
+          setInfoMessage('Huella registrada.');
           if (onFingerprintCaptured) onFingerprintCaptured(payload);
           return;
         }
@@ -101,7 +101,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
       };
       setCredentialData(payload);
       setStatus('DONE');
-      setInfoMessage('Plantilla criptográfica de huella generada (lista para cifrado AES-256-GCM en PostgreSQL).');
+      setInfoMessage('Huella registrada.');
       if (onFingerprintCaptured) onFingerprintCaptured(payload);
     }, 600);
   };
@@ -115,17 +115,16 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
           </div>
           <div>
             <h4 className="text-sm font-bold">
-              Captura y Tokenización de Huella Digital (WebAuthn FIDO2 / Sensor USB)
+              Registrar huella
             </h4>
-            <p className="text-xs text-slate-400">
-              Se almacena la clave pública COSE y el hash HMAC-SHA256 en la tabla{' '}
-              <code className="text-amber-300">huellas_biometricas</code>.
+            <p className="text-sm text-slate-400">
+              Usa el lector de huella de tu celular o computador.
             </p>
           </div>
         </div>
         {status === 'DONE' && (
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Huella Vinculada
+            <CheckCircle2 className="w-3.5 h-3.5" /> Lista
           </span>
         )}
       </div>
@@ -133,7 +132,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
         <div>
           <label className="block text-xs font-semibold text-slate-300 mb-1">
-            Dedo a Registrar:
+            Dedo
           </label>
           <select
             value={dedo}
@@ -154,7 +153,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
             className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow transition"
           >
             <Fingerprint className="w-4 h-4" />
-            Escanear con Sensor del Dispositivo (WebAuthn)
+            Usar lector de huella
           </button>
 
           <button
@@ -163,7 +162,7 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition"
           >
             <Cpu className="w-4 h-4 text-blue-400" />
-            Lector Biométrico USB (Óptico)
+            Usar lector externo (USB)
           </button>
         </div>
       </div>
@@ -174,9 +173,6 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
             <div className="text-emerald-400 font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
               {infoMessage}
-            </div>
-            <div className="text-slate-400 font-mono text-[11px]">
-              Credential ID: {credentialData.credentialId} ({credentialData.dedoIndice})
             </div>
           </div>
         </div>
