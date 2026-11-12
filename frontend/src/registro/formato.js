@@ -59,11 +59,11 @@ export function enmascararCelular(valor = '') {
   return `+56 9 •••• ${d.slice(-4)}`;
 }
 
-/** g•••••@gmail.com */
+/** al•••@gmail.com */
 export function enmascararCorreo(valor = '') {
   const [usuario, dominio] = valor.split('@');
   if (!usuario || !dominio) return valor;
-  return `${usuario[0]}${'•'.repeat(Math.max(3, usuario.length - 1))}@${dominio}`;
+  return `${usuario.slice(0, usuario.length > 3 ? 2 : 1)}•••@${dominio}`;
 }
 
 export function edadDesde(fechaIso) {

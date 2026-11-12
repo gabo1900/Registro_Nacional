@@ -23,7 +23,7 @@ const separar = (iso) => {
 };
 
 const base =
-  'h-14 w-full rounded-xl border bg-white text-[1.0625rem] text-slate-900 outline-none transition-colors focus:ring-3';
+  'h-14 w-full rounded-xl border bg-white text-[1.0625rem] text-tinta outline-none transition-colors focus:ring-3';
 
 /**
  * Fecha en tres campos (día, mes, año). Para una fecha de nacimiento es más
@@ -42,17 +42,17 @@ export default function CampoFecha({ label, valor, onCambio, error }) {
   };
 
   const borde = error
-    ? 'border-red-600 focus:ring-red-600/20'
-    : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/15';
+    ? 'border-error-700 focus:ring-error-700/20'
+    : 'border-linea-fuerte focus:border-marca-700 focus:ring-marca-700/15';
   const errorId = `${id}-error`;
   const describedBy = error ? errorId : undefined;
 
   return (
     <fieldset aria-describedby={describedBy}>
-      <legend className="mb-2 block text-[0.9375rem] font-medium text-slate-800">{label}</legend>
+      <legend className="mb-2 block text-[0.9375rem] font-bold text-tinta">{label}</legend>
       <div className="grid grid-cols-[1fr_1.75fr_1.25fr] gap-3">
         <div className="space-y-1.5">
-          <label htmlFor={`${id}-d`} className="block text-sm text-slate-500">Día</label>
+          <label htmlFor={`${id}-d`} className="block text-sm text-tinta-tenue">Día</label>
           <input
             id={`${id}-d`}
             autoFocus
@@ -68,11 +68,11 @@ export default function CampoFecha({ label, valor, onCambio, error }) {
               cambiar('dia', v);
               if (v.length === 2 || Number(v) > 3) mesRef.current?.focus();
             }}
-            className={`${base} ${borde} px-4 text-center tabular-nums placeholder:text-slate-400`}
+            className={`${base} ${borde} px-4 text-center tabular-nums placeholder:text-tinta-apagada`}
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor={`${id}-m`} className="block text-sm text-slate-500">Mes</label>
+          <label htmlFor={`${id}-m`} className="block text-sm text-tinta-tenue">Mes</label>
           <div className="relative">
             <select
               id={`${id}-m`}
@@ -84,23 +84,23 @@ export default function CampoFecha({ label, valor, onCambio, error }) {
                 cambiar('mes', e.target.value);
                 if (e.target.value) anioRef.current?.focus();
               }}
-              className={`${base} ${borde} appearance-none pl-4 pr-9 ${partes.mes ? '' : 'text-slate-400'}`}
+              className={`${base} ${borde} appearance-none pl-4 pr-9 ${partes.mes ? '' : 'text-tinta-apagada'}`}
             >
               <option value="" disabled>Mes</option>
               {MESES.map((m, i) => (
-                <option key={m} value={String(i + 1)} className="text-slate-900">
+                <option key={m} value={String(i + 1)} className="text-tinta">
                   {m}
                 </option>
               ))}
             </select>
             <ChevronDown
-              className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-slate-500"
+              className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-tenue"
               aria-hidden="true"
             />
           </div>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor={`${id}-a`} className="block text-sm text-slate-500">Año</label>
+          <label htmlFor={`${id}-a`} className="block text-sm text-tinta-tenue">Año</label>
           <input
             id={`${id}-a`}
             ref={anioRef}
@@ -112,12 +112,12 @@ export default function CampoFecha({ label, valor, onCambio, error }) {
             value={partes.anio}
             aria-invalid={error ? true : undefined}
             onChange={(e) => cambiar('anio', e.target.value.replace(/\D/g, '').slice(0, 4))}
-            className={`${base} ${borde} px-4 text-center tabular-nums placeholder:text-slate-400`}
+            className={`${base} ${borde} px-4 text-center tabular-nums placeholder:text-tinta-apagada`}
           />
         </div>
       </div>
       {error && (
-        <p id={errorId} className="mt-2 flex items-start gap-1.5 text-sm text-red-700">
+        <p id={errorId} className="mt-2 flex items-start gap-1.5 text-sm text-error-700">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {error}
         </p>

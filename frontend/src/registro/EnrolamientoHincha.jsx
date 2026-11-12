@@ -66,7 +66,6 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
         'nacimiento',
         'terminos',
         'antesFoto',
-        huellaDisponible() && 'huella',
         'revisar',
       ].filter(Boolean),
     [necesitaDocumento]
@@ -92,11 +91,8 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
 
   const indice = Math.max(0, pasos.indexOf(paso));
   const progreso = PESO_CUENTA + ((indice + 1) / (pasos.length + 1)) * (1 - PESO_CUENTA);
-  const etapa = ['documento', 'nacimiento', 'terminos'].includes(paso)
-    ? 'Tus datos'
-    : ['antesFoto', 'huella'].includes(paso)
-      ? 'Tu identidad'
-      : 'Confirmar';
+  // Las huellas se registran en un punto de enrolamiento, no desde el celular.
+  const fase = ['documento', 'nacimiento'].includes(paso) ? 0 : paso === 'terminos' ? 1 : 2;
 
   const actualizar = (campo, valor) => {
     setDatos((d) => ({ ...d, [campo]: valor }));
@@ -109,7 +105,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
   };
   const siguiente = () => ir(pasos[indice + 1]);
   const atras = indice > 0 ? () => ir(pasos[indice - 1]) : undefined;
-  const comun = { etapa, progreso, onAtras: atras, onCerrar };
+  const comun = { fase, progreso, onAtras: atras, onCerrar };
   // Cada etapa corresponde a una llamada real al servidor.
   const chequeos = huella
     ? ['Enviando tus datos y tu foto', 'Guardando tu huella']
@@ -232,14 +228,14 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
         }}
         accion={<BotonPrincipal>Acepto y continúo</BotonPrincipal>}
       >
-        <ul className="space-y-3 text-base text-slate-700">
+        <ul className="space-y-3 text-base text-tinta-suave">
           {[
             'Usamos tu cara solo para reconocerte al comprar entradas y en la puerta del estadio.',
             'Tus datos se guardan protegidos, en servidores en Chile.',
             'Puedes pedir ver, corregir o borrar tus datos cuando quieras, sin costo.',
           ].map((t) => (
             <li key={t} className="flex gap-3">
-              <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-700" aria-hidden="true" />
+              <ShieldCheck className="mt-0.5 size-5 shrink-0 text-marca-700" aria-hidden="true" />
               <span className="text-pretty">{t}</span>
             </li>
           ))}
@@ -247,7 +243,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
         <button
           type="button"
           onClick={onOpenTerms}
-          className="mt-4 -ml-1 h-11 rounded-lg px-1 text-base font-semibold text-blue-700 underline underline-offset-4"
+          className="mt-4 -ml-1 h-11 rounded-lg px-1 text-base font-bold text-marca-700 underline underline-offset-4"
         >
           Leer los términos completos
         </button>
@@ -257,12 +253,12 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
           {casillas.map((c) => (
             <label
               key={c.campo}
-              className={`flex cursor-pointer items-start gap-3.5 rounded-2xl border p-4 transition-colors ${
+              className={`flex cursor-pointer items-start gap-3.5 rounded-xl border p-4 transition-colors ${
                 datos[c.campo]
-                  ? 'border-blue-700 bg-blue-50'
+                  ? 'border-marca-700 bg-marca-50'
                   : errores[c.campo]
-                    ? 'border-red-600 bg-white'
-                    : 'border-slate-200 bg-white'
+                    ? 'border-error-700 bg-white'
+                    : 'border-linea bg-white'
               }`}
             >
               <input
@@ -273,9 +269,9 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
                   setErrorGeneral('');
                 }}
                 aria-invalid={errores[c.campo] ? true : undefined}
-                className="mt-0.5 size-6 shrink-0 accent-blue-700"
+                className="mt-0.5 size-6 shrink-0 accent-marca-700"
               />
-              <span className="text-[0.9375rem] leading-relaxed text-slate-800">{c.texto}</span>
+              <span className="text-[0.9375rem] leading-relaxed text-tinta">{c.texto}</span>
             </label>
           ))}
         </fieldset>
@@ -297,24 +293,24 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
         onSubmit={() => ir('foto')}
         accion={<BotonPrincipal>{foto ? 'Tomar otra foto' : 'Abrir la cámara'}</BotonPrincipal>}
       >
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-linea">
           {[
             { icono: <Sun className="size-6" />, titulo: 'Busca buena luz', detalle: 'Que la luz te dé de frente, no por detrás.' },
             { icono: <Glasses className="size-6" />, titulo: 'Despeja tu cara', detalle: 'Sin lentes de sol, gorro ni mascarilla.' },
             { icono: <Smartphone className="size-6" />, titulo: 'Celular a la altura de tus ojos', detalle: 'Con el brazo estirado y la pantalla hacia ti.' },
           ].map((t) => (
             <li key={t.titulo} className="flex items-start gap-4 py-4">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700" aria-hidden="true">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sutil text-tinta-suave" aria-hidden="true">
                 {t.icono}
               </span>
               <span>
-                <span className="block text-base font-semibold text-slate-900">{t.titulo}</span>
-                <span className="block text-[0.9375rem] text-slate-600">{t.detalle}</span>
+                <span className="block text-base font-bold text-tinta">{t.titulo}</span>
+                <span className="block text-[0.9375rem] text-tinta-tenue">{t.detalle}</span>
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-sm text-slate-500">Te pediremos permiso para usar la cámara.</p>
+        <p className="mt-4 text-sm text-tinta-tenue">Te pediremos permiso para usar la cámara.</p>
       </PasoShell>
     );
   }
@@ -363,11 +359,11 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
         }
       >
         <div className="grid place-items-center py-6" aria-hidden="true">
-          <span className={`grid size-28 place-items-center rounded-full ${huella ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+          <span className={`grid size-28 place-items-center rounded-full ${huella ? 'bg-ok-50 text-ok-700' : 'bg-marca-50 text-marca-700'}`}>
             {huella ? <Check className="size-14" /> : <Fingerprint className="size-14" />}
           </span>
         </div>
-        <p className="text-center text-[0.9375rem] text-slate-600">
+        <p className="text-center text-[0.9375rem] text-tinta-tenue">
           Usaremos el lector de huella o desbloqueo de tu celular. Tu huella no sale del teléfono.
         </p>
         {errorGeneral && (
@@ -396,7 +392,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
             <Aviso>{errorGeneral}</Aviso>
           </div>
         )}
-        <div className="divide-y divide-slate-100 border-y border-slate-100">
+        <div className="divide-y divide-linea border-y border-linea">
           {nombreCompleto && <FilaResumen etiqueta="Nombre" valor={nombreCompleto} />}
           <FilaResumen
             etiqueta={datos.tipoDocumento === 'CEDULA_CHILE' ? 'RUT' : 'Pasaporte'}
@@ -412,14 +408,14 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
                 <img src={foto.selfieBase64} alt="" className="h-14 w-11 rounded-[50%] object-cover -scale-x-100" />
               ) : null}
               <div>
-                <div className="text-sm text-slate-500">Foto de tu cara</div>
-                <div className={`text-base font-medium ${foto ? 'text-slate-900' : 'text-red-700'}`}>{foto ? 'Lista' : 'Falta'}</div>
+                <div className="text-sm text-tinta-tenue">Foto de tu cara</div>
+                <div className={`text-base font-bold ${foto ? 'text-tinta' : 'text-error-700'}`}>{foto ? 'Lista' : 'Falta'}</div>
               </div>
             </div>
             <button
               type="button"
               onClick={() => ir('antesFoto')}
-              className="h-11 shrink-0 rounded-xl px-3 text-[0.9375rem] font-semibold text-blue-700 active:bg-blue-50"
+              className="h-11 shrink-0 rounded-xl px-3 text-[0.9375rem] font-bold text-marca-700 active:bg-marca-50"
             >
               {foto ? 'Cambiar' : 'Tomar'}
             </button>
@@ -434,7 +430,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
 
   if (paso === 'verificando') {
     return (
-      <PasoShell etapa="Confirmar" progreso={0.97} titulo="Enviando tu registro" descripcion="Toma unos segundos. No cierres esta pantalla.">
+      <PasoShell fase={2} progreso={0.97} titulo="Enviando tu registro" descripcion="Toma unos segundos. No cierres esta pantalla.">
         <ol className="space-y-1" aria-live="polite">
           {chequeos.map((texto, i) => {
             const listo = i < chequeosListos;
@@ -443,13 +439,13 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
               <li key={texto} className="flex items-center gap-3.5 py-3">
                 <span
                   className={`grid size-8 shrink-0 place-items-center rounded-full ${
-                    listo ? 'bg-emerald-600 text-white' : activo ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'
+                    listo ? 'bg-ok-700 text-white' : activo ? 'bg-marca-50 text-marca-700' : 'bg-sutil text-tinta-apagada'
                   }`}
                   aria-hidden="true"
                 >
                   {listo ? <Check className="size-5" strokeWidth={3} /> : activo ? <Loader2 className="size-5 animate-spin motion-reduce:animate-none" /> : null}
                 </span>
-                <span className={`text-base ${listo ? 'text-slate-900' : activo ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>
+                <span className={`text-base ${listo ? 'text-tinta' : activo ? 'font-bold text-tinta' : 'text-tinta-apagada'}`}>
                   {texto}
                   <span className="sr-only">{listo ? ' (listo)' : activo ? ' (en curso)' : ''}</span>
                 </span>
@@ -464,7 +460,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
   // paso === 'listo'
   return (
     <PasoShell
-      etapa="Registro completo"
+      fase={3}
       progreso={1}
       titulo="¡Listo! Ya estás registrado"
       descripcion="Ya puedes comprar entradas. En el estadio, mira a la cámara de la entrada o muestra tu cédula."
@@ -472,7 +468,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
       accion={<BotonPrincipal>Ver mi pase</BotonPrincipal>}
     >
       <div className="grid place-items-center py-8" aria-hidden="true">
-        <span className="grid size-28 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+        <span className="grid size-28 place-items-center rounded-full bg-ok-50 text-ok-700">
           <CircleCheck className="size-16" />
         </span>
       </div>

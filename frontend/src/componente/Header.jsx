@@ -1,147 +1,68 @@
 import React from 'react';
-import {
-  ShieldCheck,
-  ScanFace,
-  Lock,
-  CheckCircle2,
-  FileCheck2,
-  ArrowRight,
-  Fingerprint,
-  QrCode,
-  LogIn,
-} from 'lucide-react';
+import { ArrowRight, CircleCheck, ScanFace } from 'lucide-react';
+import { Boton, Contenedor } from './ui';
 
-export default function Header({ onGoLogin, onGoRegister, onOpenTerms }) {
+/** Portada de Inicio: qué es, para qué sirve y una sola acción principal. */
+export default function Header({ onGoLogin, onGoRegister }) {
   return (
-    <header className="relative bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden border-b border-slate-800">
-      {/* Subtle Background Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-blue-600/10 blur-[120px] pointer-events-none" />
+    <section className="border-b border-linea bg-superficie">
+      <Contenedor className="grid items-center gap-10 py-10 sm:py-14 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:py-20">
+        <div>
+          <h1 className="max-w-xl text-[2rem] font-bold leading-[1.1] tracking-tight sm:text-titulo-1 lg:text-[2.75rem]">
+            Regístrate una vez para ir al estadio
+          </h1>
+          <p className="mt-4 max-w-xl text-lg leading-relaxed text-tinta-suave">
+            El Registro Nacional de Hinchas es obligatorio para comprar entradas del fútbol profesional chileno. Toma
+            unos 3 minutos desde tu celular.
+          </p>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-          {/* Left Column: Clear Presentation & Actions */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              Plataforma Oficial • Asociación Nacional de Fútbol Profesional (ANFP)
-            </div>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Boton tamano="lg" onClick={onGoRegister} iconoFinal={<ArrowRight className="size-5" aria-hidden="true" />} className="sm:min-w-56">
+              Registrarme
+            </Boton>
+            <Boton variante="texto" tamano="lg" onClick={onGoLogin}>
+              Ya estoy registrado
+            </Boton>
+          </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-                Registro Nacional de Hinchas{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-white to-blue-500">
-                  (RNH)
+          <p className="mt-6 flex items-center gap-2 text-[0.9375rem] text-tinta-tenue">
+            <CircleCheck className="size-5 shrink-0 text-ok-700" aria-hidden="true" />
+            Servicio oficial de la ANFP. Gratis.
+          </p>
+        </div>
+
+        {/* Vista previa del pase: muestra lo que obtendrá la persona */}
+        <figure className="mx-auto w-full max-w-sm lg:max-w-md">
+          <div className="rounded-xl border border-linea bg-fondo p-3 shadow-elevada sm:p-4">
+            <div className="rounded-lg bg-superficie p-5 shadow-tarjeta">
+              <div className="flex items-center gap-4">
+                <span className="grid size-14 shrink-0 place-items-center rounded-full bg-ok-50 text-ok-700" aria-hidden="true">
+                  <CircleCheck className="size-8" />
                 </span>
-              </h1>
-              <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-xl">
-                Sistema centralizado para la identificación y acceso seguro a los estadios del fútbol
-                chileno. Validación de identidad, biometría facial con prueba de vida y control del
-                derecho de admisión bajo la <strong>Ley N° 19.327</strong> y <strong>Ley N° 19.628</strong>.
+                <div>
+                  <p className="text-lg font-bold leading-tight">Listo para ingresar</p>
+                  <p className="text-[0.9375rem] text-tinta-tenue">Tu registro está activo</p>
+                </div>
+              </div>
+              <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-linea pt-4 text-[0.9375rem]">
+                <div>
+                  <dt className="text-sm text-tinta-tenue">Nombre</dt>
+                  <dd className="font-bold">Camila Rojas</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-tinta-tenue">RUT</dt>
+                  <dd className="font-bold tabular-nums">••.•••.483-7</dd>
+                </div>
+              </dl>
+              <p className="mt-4 flex items-center gap-2 rounded-lg bg-marca-50 px-3 py-2.5 text-[0.9375rem] font-bold text-marca-900">
+                <ScanFace className="size-5 shrink-0" aria-hidden="true" />
+                En la entrada, mira a la cámara
               </p>
             </div>
-
-            {/* Direct Action Buttons: "Registro" & "Iniciar Sesión" */}
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                onClick={onGoRegister}
-                className="px-6 py-3 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 shadow-lg shadow-blue-900/30 flex items-center gap-2 transition"
-              >
-                <span>Registro</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={onGoLogin}
-                className="px-6 py-3 rounded-xl font-bold text-sm text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center gap-2 transition"
-              >
-                <LogIn className="w-4 h-4 text-blue-400" />
-                <span>Iniciar Sesión</span>
-              </button>
-
-              <button
-                onClick={onOpenTerms}
-                className="px-3 py-2 text-xs font-medium text-slate-400 hover:text-white underline underline-offset-4 flex items-center gap-1 transition"
-              >
-                <FileCheck2 className="w-3.5 h-3.5 text-emerald-400" />
-                Términos y Condiciones
-              </button>
-            </div>
-
-            {/* Minimalist Security Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-4 border-t border-slate-800/80">
-              <div className="flex items-center gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
-                <div className="text-[11px] leading-tight font-semibold text-slate-300">
-                  Cifrado AES-256
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                <ScanFace className="w-4 h-4 text-blue-400 shrink-0" />
-                <div className="text-[11px] leading-tight font-semibold text-slate-300">
-                  Zero-Retention
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                <Fingerprint className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="text-[11px] leading-tight font-semibold text-slate-300">
-                  FIDO2 WebAuthn
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
-                <div className="text-[11px] leading-tight font-semibold text-slate-300">
-                  GCP Chile
-                </div>
-              </div>
-            </div>
           </div>
-
-          {/* Right Column: Clean Digital Pass Card Preview */}
-          <div className="lg:col-span-5">
-            <div className="relative mx-auto max-w-sm rounded-3xl p-6 bg-gradient-to-br from-slate-900 via-blue-950/60 to-slate-900 border border-slate-700/80 shadow-2xl space-y-5">
-              {/* Card Header */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  <span className="text-xs font-black tracking-wider uppercase text-white">
-                    Pase Digital RNH
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  HABILITADO
-                </span>
-              </div>
-
-              {/* Card Body */}
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
-                  <ScanFace className="w-9 h-9 text-blue-400" />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm font-extrabold text-white">Identidad Verificada</div>
-                  <div className="text-xs text-slate-400">RUT: 18.***.***-K</div>
-                  <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Prueba de Vida Superada (98.4%)
-                  </div>
-                </div>
-              </div>
-
-              {/* Card Footer Info */}
-              <div className="bg-slate-950/80 rounded-2xl p-3 border border-slate-800 flex items-center justify-between text-xs">
-                <div>
-                  <div className="text-[10px] text-slate-400 font-semibold">Torniquete & Entrada</div>
-                  <div className="font-bold text-white text-[11px]">Acceso Rápido por Rostro</div>
-                </div>
-                <QrCode className="w-8 h-8 text-slate-300" />
-              </div>
-
-              <div className="text-[11px] text-center text-slate-400">
-                Válido para compra de entradas y acceso a todos los recintos deportivos del país.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
+          <figcaption className="mt-3 text-center text-sm text-tinta-tenue">Ejemplo de cómo se verá tu pase</figcaption>
+        </figure>
+      </Contenedor>
+    </section>
   );
 }

@@ -1,160 +1,285 @@
-import React from 'react';
-import { ShieldCheck, LogOut, UserCheck, Building2, FileText, Lock, LogIn, UserPlus } from 'lucide-react';
-import { ENV, USE_LOCAL } from '../config/env';
+import React, { useEffect, useRef, useState } from 'react';
+import { Menu, X, LogOut, House, FileText, LayoutDashboard, LogIn, ShieldCheck } from 'lucide-react';
+import { Boton, Contenedor, Logo } from './ui';
 
-export default function Navbar({
-  currentUser,
-  activeScreen,
-  setActiveScreen,
-  onOpenTerms,
-  onLogout,
-}) {
-  const getRoleBadge = (rol) => {
-    switch (rol) {
-      case 'SUPER_ADMIN':
-        return { label: 'SUPER ADMIN', color: 'bg-indigo-600 text-white' };
-      case 'ADMIN_TENANT':
-        return { label: 'ADMIN RECINTO', color: 'bg-emerald-600 text-white' };
-      case 'OPERADOR_ACCESO':
-        return { label: 'OPERADOR PUERTA', color: 'bg-amber-600 text-white' };
-      default:
-        return { label: 'HINCHA REGISTRADO', color: 'bg-blue-600 text-white' };
-    }
+const ROLES = {
+  SUPER_ADMIN: 'Super administrador',
+  ADMIN_TENANT: 'Administrador de estadio',
+  OPERADOR_ACCESO: 'Operador de puerta',
+};
+
+const iniciales = (nombre = '') =>
+  nombre
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('') || '·';
+
+function Avatar({ nombre, grande = false }) {
+  return (
+    <span
+      className={`grid shrink-0 place-items-center rounded-full bg-marca-50 font-bold text-marca-800 ring-1 ring-marca-200 ${
+        grande ? 'size-11 text-base' : 'size-9 text-sm'
+      }`}
+      aria-hidden="true"
+    >
+      {iniciales(nombre)}
+    </span>
+  );
+}
+
+export default function Navbar({ currentUser, activeScreen, setActiveScreen, onOpenTerms, onLogout }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [bordeMenu, setBordeMenu] = useState(0);
+  const barraRef = useRef(null);
+  const botonMenuRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const ir = (pantalla) => {
+    setMenuAbierto(false);
+    setActiveScreen(pantalla);
+    window.scrollTo({ top: 0 });
   };
 
+  // Menú móvil: se ubica bajo la barra, se cierra con Escape o al pasar a pantalla grande.
+  useEffect(() => {
+    if (!menuAbierto) return undefined;
+    setBordeMenu(barraRef.current?.getBoundingClientRect().bottom || 0);
+    const alTeclear = (e) => {
+      if (e.key === 'Escape') {
+        setMenuAbierto(false);
+        botonMenuRef.current?.focus();
+      }
+    };
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const alCambiar = () => mq.matches && setMenuAbierto(false);
+    window.addEventListener('keydown', alTeclear);
+    mq.addEventListener('change', alCambiar);
+    panelRef.current?.querySelector('button')?.focus();
+    return () => {
+      window.removeEventListener('keydown', alTeclear);
+      mq.removeEventListener('change', alCambiar);
+    };
+  }, [menuAbierto]);
+
+  const rol = currentUser && ROLES[currentUser.rol];
+
+  const enlaces = [
+    { id: 'landing', texto: 'Inicio', icono: House, onClick: () => ir('landing') },
+    currentUser && { id: 'panel', texto: 'Mi panel', icono: LayoutDashboard, onClick: () => ir('panel') },
+    {
+      id: 'terminos',
+      texto: 'Términos y condiciones',
+      icono: FileText,
+      onClick: () => {
+        setMenuAbierto(false);
+        onOpenTerms();
+      },
+    },
+  ].filter(Boolean);
+
   return (
-    <nav className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 text-white shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo & Brand */}
-          <div
-            onClick={() => setActiveScreen(currentUser ? 'panel' : 'landing')}
-            className="flex items-center gap-3 cursor-pointer group"
+    <>
+      {/* Franja institucional: deja claro que es el sitio oficial */}
+      <div className="tema-oscuro bg-tinta pt-[env(safe-area-inset-top)] text-white/85">
+        <Contenedor className="flex h-9 items-center justify-between gap-4 text-sm">
+          <p className="flex items-center gap-2">
+            <ShieldCheck className="size-4 shrink-0 text-white/70" aria-hidden="true" />
+            <span className="sm:hidden">Sitio oficial de la ANFP</span>
+            <span className="hidden sm:inline">Sitio oficial de la Asociación Nacional de Fútbol Profesional</span>
+          </p>
+          <a
+            href="mailto:marketing@anfpchile.cl"
+            className="hidden text-white/85 underline decoration-white/30 underline-offset-4 hover:text-white hover:decoration-white md:inline"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-blue-700 flex items-center justify-center shadow-md group-hover:scale-105 transition">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-tight text-base sm:text-lg text-white">
-                  RNH CHILE
-                </span>
-                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30">
-                  ANFP
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
-                Registro Nacional de Hinchas
-              </p>
-            </div>
-          </div>
+            Ayuda: marketing@anfpchile.cl
+          </a>
+        </Contenedor>
+      </div>
 
-          {/* Center Navigation Links */}
-          <div className="hidden md:flex items-center gap-1.5">
+      <header ref={barraRef} className="sticky top-0 z-30 border-b border-linea bg-superficie">
+        <Contenedor className="flex h-[4.5rem] items-stretch justify-between gap-6">
+          <div className="flex items-stretch gap-10">
             <button
-              onClick={() => setActiveScreen('landing')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeScreen === 'landing'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-900'
-              }`}
+              type="button"
+              onClick={() => ir(currentUser ? 'panel' : 'landing')}
+              className="-ml-1 self-center rounded-md p-1"
+              aria-label="Registro Nacional de Hinchas, ir al inicio"
             >
-              Inicio
+              <span className="hidden sm:block">
+                <Logo />
+              </span>
+              <span className="sm:hidden">
+                <Logo compacto />
+              </span>
             </button>
 
-            <button
-              onClick={onOpenTerms}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-1.5 transition"
-            >
-              <FileText className="w-3.5 h-3.5 text-red-400" />
-              Términos y Condiciones
-            </button>
-
-            {currentUser && (
-              <button
-                onClick={() => setActiveScreen('panel')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                  activeScreen === 'panel'
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'bg-slate-800 text-blue-300 hover:bg-slate-700'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                Mi Panel
-              </button>
-            )}
+            {/* Navegación de escritorio: texto simple, la página actual se subraya */}
+            <nav aria-label="Principal" className="hidden lg:flex">
+              <ul className="flex items-stretch gap-7">
+                {enlaces.map((e) => {
+                  const actual = activeScreen === e.id;
+                  return (
+                    <li key={e.id} className="flex">
+                      <button
+                        type="button"
+                        onClick={e.onClick}
+                        aria-current={actual ? 'page' : undefined}
+                        className={`-mb-px border-b-[3px] pt-[3px] font-bold transition-colors ${
+                          actual
+                            ? 'border-marca-700 text-tinta'
+                            : 'border-transparent text-tinta-tenue hover:border-linea-fuerte hover:text-tinta'
+                        }`}
+                      >
+                        {e.texto}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
           </div>
 
-          {/* Right Action Area */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span
-              title={`API Base: ${ENV.API_BASE_URL}`}
-              className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono border ${
-                USE_LOCAL
-                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
-                  : 'bg-purple-950/60 text-purple-300 border-purple-700/50'
-              }`}
-            >
-              <Lock className="w-3 h-3" />
-              {USE_LOCAL ? 'LOCAL' : 'PRODUCCIÓN'}
-            </span>
-
-            {!currentUser ? (
-              <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {currentUser ? (
+              <div className="hidden items-center gap-4 lg:flex">
+                <span className="flex min-w-0 items-center gap-3">
+                  <Avatar nombre={currentUser.nombreCompleto} />
+                  <span className="min-w-0 leading-tight">
+                    <span className="block max-w-[14rem] truncate font-bold" title={currentUser.nombreCompleto}>
+                      {currentUser.nombreCompleto}
+                    </span>
+                    <span className="block text-sm text-tinta-tenue">{rol || 'Hincha registrado'}</span>
+                  </span>
+                </span>
+                <span className="h-8 w-px bg-linea" aria-hidden="true" />
                 <button
-                  onClick={() => setActiveScreen('login')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeScreen === 'login'
-                      ? 'bg-white text-slate-900'
-                      : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700'
-                  }`}
+                  type="button"
+                  onClick={onLogout}
+                  className="flex min-h-11 items-center gap-2 rounded-md px-1 font-bold text-tinta-tenue hover:text-tinta"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  Iniciar Sesión
-                </button>
-                <button
-                  onClick={() => setActiveScreen('register')}
-                  className="px-4 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-white shadow-md flex items-center gap-1.5 transition"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Registro
+                  <LogOut className="size-5" aria-hidden="true" />
+                  Salir
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                <div className="text-right hidden sm:block">
-                  <div className="text-xs font-bold text-white flex items-center justify-end gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    {currentUser.nombreCompleto}
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                    <span
-                      className={`text-[9px] px-2 py-0.5 rounded-full font-bold tracking-wider ${
-                        getRoleBadge(currentUser.rol).color
-                      }`}
-                    >
-                      {getRoleBadge(currentUser.rol).label}
-                    </span>
-                    {currentUser.tenantNombre && (
-                      <span className="text-[11px] text-slate-400 truncate max-w-[130px]">
-                        • {currentUser.tenantNombre}
-                      </span>
-                    )}
-                  </div>
-                </div>
+              <div className="hidden items-center gap-6 lg:flex">
                 <button
-                  onClick={onLogout}
-                  title="Cerrar Sesión"
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-red-600/90 text-slate-300 hover:text-white border border-slate-800 transition flex items-center gap-1 text-xs font-semibold"
+                  type="button"
+                  onClick={() => ir('login')}
+                  aria-current={activeScreen === 'login' ? 'page' : undefined}
+                  className="flex min-h-11 items-center gap-2 rounded-md font-bold text-tinta-suave hover:text-marca-700"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">Salir</span>
+                  <LogIn className="size-5" aria-hidden="true" />
+                  Iniciar sesión
                 </button>
+                <Boton tamano="sm" onClick={() => ir('register')} className="rounded-lg px-5">
+                  Registrarme
+                </Boton>
               </div>
             )}
+
+            {!currentUser && activeScreen !== 'register' && (
+              <span className="hidden sm:block lg:hidden">
+                <Boton tamano="sm" onClick={() => ir('register')} className="rounded-lg">
+                  Registrarme
+                </Boton>
+              </span>
+            )}
+            <button
+              ref={botonMenuRef}
+              type="button"
+              onClick={() => setMenuAbierto((v) => !v)}
+              aria-expanded={menuAbierto}
+              aria-controls="menu-movil"
+              aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
+              className="-mr-2 grid size-12 place-items-center rounded-md text-tinta hover:bg-fondo lg:hidden"
+            >
+              {menuAbierto ? <X className="size-6" aria-hidden="true" /> : <Menu className="size-6" aria-hidden="true" />}
+            </button>
           </div>
-        </div>
-      </div>
-    </nav>
+        </Contenedor>
+
+        {/* Menú móvil */}
+        {menuAbierto && (
+          <>
+            <div
+              className="fixed inset-x-0 bottom-0 bg-tinta/40 lg:hidden"
+              style={{ top: bordeMenu }}
+              onClick={() => setMenuAbierto(false)}
+              aria-hidden="true"
+            />
+            <div
+              id="menu-movil"
+              ref={panelRef}
+              className="absolute inset-x-0 top-full border-b border-linea bg-superficie shadow-elevada lg:hidden"
+            >
+              <Contenedor className="py-3">
+                {currentUser && (
+                  <div className="mb-2 flex items-center gap-3 border-b border-linea px-1 pb-4 pt-2">
+                    <Avatar nombre={currentUser.nombreCompleto} grande />
+                    <div className="min-w-0">
+                      <p className="font-bold break-words">{currentUser.nombreCompleto}</p>
+                      <p className="text-sm text-tinta-tenue">{rol || currentUser.tenantNombre || 'Hincha registrado'}</p>
+                    </div>
+                  </div>
+                )}
+                <nav aria-label="Menú">
+                  <ul>
+                    {enlaces.map((e) => {
+                      const Icono = e.icono;
+                      const actual = activeScreen === e.id;
+                      return (
+                        <li key={e.id}>
+                          <button
+                            type="button"
+                            onClick={e.onClick}
+                            aria-current={actual ? 'page' : undefined}
+                            className={`flex min-h-12 w-full items-center gap-3 border-l-[3px] px-3 text-left font-bold ${
+                              actual ? 'border-marca-700 bg-fondo text-tinta' : 'border-transparent text-tinta-suave hover:bg-fondo'
+                            }`}
+                          >
+                            <Icono className="size-5 shrink-0" aria-hidden="true" />
+                            {e.texto}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+                <div className="mt-3 border-t border-linea pt-4">
+                  {currentUser ? (
+                    <Boton
+                      variante="secundario"
+                      ancho
+                      onClick={() => {
+                        setMenuAbierto(false);
+                        onLogout();
+                      }}
+                      icono={<LogOut className="size-5" aria-hidden="true" />}
+                    >
+                      Cerrar sesión
+                    </Boton>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="sm:hidden">
+                        <Boton ancho tamano="lg" onClick={() => ir('register')}>
+                          Registrarme
+                        </Boton>
+                      </div>
+                      <Boton variante="secundario" ancho onClick={() => ir('login')} icono={<LogIn className="size-5" aria-hidden="true" />}>
+                        Iniciar sesión
+                      </Boton>
+                    </div>
+                  )}
+                </div>
+              </Contenedor>
+            </div>
+          </>
+        )}
+      </header>
+    </>
   );
 }

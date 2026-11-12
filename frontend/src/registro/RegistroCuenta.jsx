@@ -77,14 +77,13 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
     onError: () => setErrorGeneral('No pudimos conectar con Google. Intenta de nuevo o usa tu correo.'),
   });
 
-  const comun = { progreso, onAtras: atras, onCerrar, etapa: 'Crear cuenta' };
+  const comun = { progreso, onAtras: atras, onCerrar, fase: 0 };
   useBotonAtras(enviando ? null : atras || onCerrar);
 
   if (paso === 'inicio') {
     return (
       <PasoShell
         {...comun}
-        etapa="Registro de hinchas"
         titulo="Regístrate para ir al estadio"
         descripcion="Es obligatorio para comprar entradas del fútbol profesional. Lo haces una sola vez."
         onSubmit={siguiente}
@@ -95,15 +94,15 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
           </>
         }
       >
-        <h2 className="text-sm font-semibold text-slate-500">Ten a mano</h2>
-        <ul className="mt-3 divide-y divide-slate-100">
+        <h2 className="text-sm font-bold text-tinta-tenue">Ten a mano</h2>
+        <ul className="mt-3 divide-y divide-linea">
           {[
             { icono: <IdCard className="size-6" />, texto: 'Tu cédula de identidad o pasaporte' },
             { icono: <Sun className="size-6" />, texto: 'Un lugar con buena luz para tu foto' },
             { icono: <Clock className="size-6" />, texto: 'Unos 3 minutos' },
           ].map((item) => (
-            <li key={item.texto} className="flex items-center gap-4 py-4 text-base text-slate-800">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700" aria-hidden="true">
+            <li key={item.texto} className="flex items-center gap-4 py-4 text-base text-tinta">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sutil text-tinta-suave" aria-hidden="true">
                 {item.icono}
               </span>
               {item.texto}
@@ -129,7 +128,7 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
         {estadios.length === 0 ? (
           <div className="space-y-3" aria-busy="true" aria-label="Cargando estadios">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-100 motion-reduce:animate-none" />
+              <div key={i} className="h-16 animate-pulse rounded-xl bg-sutil motion-reduce:animate-none" />
             ))}
           </div>
         ) : (
@@ -168,7 +167,7 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
               type="button"
               onClick={() => loginGoogle()}
               disabled={enviando}
-              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white text-[1.0625rem] font-semibold text-slate-900 active:bg-slate-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-linea-fuerte bg-white text-[1.0625rem] font-bold text-tinta hover:bg-fondo active:bg-sutil focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-marca-700"
             >
               <GoogleIcono />
               Continuar con Google
@@ -346,7 +345,7 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
               onClick={() => setVerClave((v) => !v)}
               aria-label={verClave ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               aria-pressed={verClave}
-              className="grid size-12 shrink-0 place-items-center rounded-xl text-slate-500 active:bg-slate-100"
+              className="grid size-12 shrink-0 place-items-center rounded-xl text-tinta-tenue active:bg-sutil"
             >
               {verClave ? <EyeOff className="size-5" aria-hidden="true" /> : <Eye className="size-5" aria-hidden="true" />}
             </button>

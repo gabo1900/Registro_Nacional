@@ -76,9 +76,17 @@ function mensajeErrorCamara(err) {
     };
   }
   if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+    const ua = navigator.userAgent || '';
+    const esIos = /iPhone|iPad|iPod/i.test(ua);
+    const esAndroid = /Android/i.test(ua);
     return {
       titulo: 'Necesitamos permiso para usar tu cámara',
-      detalle: 'Toca el candado junto a la dirección web, permite la cámara y vuelve a intentar.',
+      detalle: 'Sin permiso no podemos tomar tu foto. Para darlo:',
+      pasos: esIos
+        ? ['Abre Ajustes en tu iPhone.', 'Entra a Safari y luego a Cámara.', 'Elige "Permitir" y vuelve aquí.']
+        : esAndroid
+          ? ['Toca el ícono a la izquierda de la dirección web.', 'Entra a Permisos y activa Cámara.', 'Vuelve aquí y toca "Intentar de nuevo".']
+          : ['Haz clic en el ícono a la izquierda de la dirección web.', 'Permite el uso de la cámara.', 'Haz clic en "Intentar de nuevo".'],
     };
   }
   if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
@@ -94,6 +102,7 @@ function mensajeErrorCamara(err) {
 }
 
 export default function CapturaFacial({ onCapturada, onCancelar }) {
+  const raizRef = useRef(null);
   const contenedorRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -102,7 +111,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
   const loopRef = useRef({ previo: null, buenos: 0, quietos: 0, movidos: 0, cara: undefined, detectando: false });
   const detectorRef = useRef(null);
   const cerrarRef = useRef(null);
-  useFondoInerte(contenedorRef);
+  useFondoInerte(raizRef);
 
   const [medidas, setMedidas] = useState({ w: 0, h: 0 });
   const [fase, setFase] = useState('abriendo'); // abriendo | error | alinear | mover | quieto | revisar
@@ -111,6 +120,9 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
   const [errorCamara, setErrorCamara] = useState(null);
   const [captura, setCaptura] = useState(null);
   const [mostrarManual, setMostrarManual] = useState(false);
+  // Intentos fallidos (cámara que no abre o foto repetida). Al tercero, ofrecemos ayuda.
+  const [intentos, setIntentos] = useState(0);
+  const necesitaAyuda = intentos >= 3;
 
   const faseRef = useRef(fase);
   faseRef.current = fase;
@@ -165,6 +177,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
     } catch (err) {
       detenerCamara();
       setErrorCamara(mensajeErrorCamara(err));
+      setIntentos((n) => n + 1);
       setFase('error');
     }
   }, [detenerCamara]);
@@ -339,6 +352,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
   }, [fase, medidas.w, medidas.h, cx, cy, rx, ry, tomarFoto]);
 
   const repetir = () => {
+    setIntentos((n) => n + 1);
     setCaptura(null);
     setAvanceQuieto(0);
     abrirCamara();
@@ -369,12 +383,16 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
 
   return (
     <div
-      ref={contenedorRef}
-      className="fixed inset-0 z-50 overflow-hidden bg-slate-950 text-white selection:bg-white/20"
+      ref={raizRef}
+      className="tema-oscuro fixed inset-0 z-50 overflow-hidden bg-slate-950 text-white selection:bg-white/20"
       role="dialog"
       aria-modal="true"
       aria-label="Foto de tu cara"
     >
+      <div
+        ref={contenedorRef}
+        className="relative mx-auto size-full overflow-hidden lg:mt-20 lg:h-[calc(100%-6rem)] lg:max-w-[640px] lg:rounded-2xl lg:ring-1 lg:ring-white/15"
+      >
       <video
         ref={videoRef}
         playsInline
@@ -433,32 +451,15 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
         </svg>
       )}
 
-      {/* Barra superior */}
-      <div className="absolute inset-x-0 top-0 pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-14 max-w-md items-center justify-between px-2">
-          <button
-            ref={cerrarRef}
-            type="button"
-            onClick={cancelar}
-            aria-label="Cerrar cámara"
-            className="grid size-12 place-items-center rounded-full bg-black/30 active:bg-black/50"
-          >
-            <X className="size-6" aria-hidden="true" />
-          </button>
-          <span className="text-base font-semibold">Tu foto</span>
-          <span className="size-12" aria-hidden="true" />
-        </div>
-      </div>
-
       {/* Mensaje en vivo bajo el óvalo */}
       {fase !== 'error' && medidas.w > 0 && (
         <div className="absolute inset-x-0 px-6 text-center" style={{ top: cy + ry + 24 }}>
           {fase === 'revisar' ? (
-            <p className="text-xl font-semibold text-balance">¿Se ve bien tu cara?</p>
+            <p className="text-xl font-bold text-balance">¿Se ve bien tu cara?</p>
           ) : (
             <p
               aria-live="polite"
-              className="mx-auto inline-block max-w-sm rounded-2xl px-4 py-2 text-xl font-semibold text-balance"
+              className="mx-auto inline-block max-w-sm rounded-xl px-4 py-2 text-xl font-bold text-balance"
               style={{ color: colorOvalo }}
             >
               {guia.texto}
@@ -483,7 +484,14 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
             <CameraOff className="size-8" />
           </span>
           <h2 className="mt-5 text-2xl font-bold text-balance">{errorCamara.titulo}</h2>
-          <p className="mt-2 max-w-xs text-base text-slate-300 text-pretty">{errorCamara.detalle}</p>
+          <p className="mt-2 max-w-xs text-base text-slate-300">{errorCamara.detalle}</p>
+          {errorCamara.pasos && (
+            <ol className="mt-4 max-w-xs list-decimal space-y-1.5 pl-5 text-left text-base text-white">
+              {errorCamara.pasos.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ol>
+          )}
         </div>
       )}
 
@@ -496,7 +504,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
                 <li
                   key={e.fase}
                   aria-current={i === etapaActual ? 'step' : undefined}
-                  className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${
+                  className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-sm font-bold ${
                     i < etapaActual
                       ? 'bg-emerald-400/20 text-emerald-300'
                       : i === etapaActual
@@ -511,11 +519,22 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
             </ol>
           )}
 
-          {enVivo && mostrarManual && (
+          {enVivo && necesitaAyuda && (
+            <div className="rounded-xl bg-white/10 p-3.5 text-left text-[0.9375rem] leading-relaxed text-white" role="status">
+              <p className="font-bold">¿Te está costando? Prueba esto:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-200">
+                <li>Ponte frente a una ventana o una luz.</li>
+                <li>Apoya los codos en algo para no moverte.</li>
+                <li>O toma la foto tú con el botón de abajo.</li>
+              </ul>
+            </div>
+          )}
+
+          {enVivo && (mostrarManual || necesitaAyuda) && (
             <button
               type="button"
               onClick={tomarFoto}
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white text-[1.0625rem] font-semibold text-slate-900 active:bg-slate-200"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-white text-[1.0625rem] font-bold text-slate-900 active:bg-slate-200"
             >
               <Camera className="size-5" aria-hidden="true" />
               Tomar la foto ahora
@@ -530,7 +549,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
                   const { espejo, ...datos } = captura; // eslint-disable-line no-unused-vars
                   onCapturada(datos);
                 }}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white text-[1.0625rem] font-semibold text-slate-900 active:bg-slate-200"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-white text-[1.0625rem] font-bold text-slate-900 active:bg-slate-200"
               >
                 <Check className="size-5" aria-hidden="true" />
                 Usar esta foto
@@ -538,7 +557,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
               <button
                 type="button"
                 onClick={repetir}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold text-white active:bg-white/10"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-bold text-white active:bg-white/10"
               >
                 <RotateCcw className="size-5" aria-hidden="true" />
                 Tomar otra
@@ -552,7 +571,7 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
                 <button
                   type="button"
                   onClick={abrirCamara}
-                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white text-[1.0625rem] font-semibold text-slate-900 active:bg-slate-200"
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-white text-[1.0625rem] font-bold text-slate-900 active:bg-slate-200"
                 >
                   <Camera className="size-5" aria-hidden="true" />
                   Intentar de nuevo
@@ -561,13 +580,32 @@ export default function CapturaFacial({ onCapturada, onCancelar }) {
               <button
                 type="button"
                 onClick={() => archivoRef.current?.click()}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold text-white active:bg-white/10"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-bold text-white active:bg-white/10"
               >
                 <ImageUp className="size-5" aria-hidden="true" />
                 Tomar o subir una selfie
               </button>
             </>
           )}
+        </div>
+      </div>
+
+      </div>
+
+      {/* Barra superior */}
+      <div className="absolute inset-x-0 top-0 pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-14 max-w-[640px] items-center justify-between px-2 lg:h-20">
+          <button
+            ref={cerrarRef}
+            type="button"
+            onClick={cancelar}
+            aria-label="Cerrar cámara"
+            className="grid size-12 place-items-center rounded-full bg-black/30 active:bg-black/50"
+          >
+            <X className="size-6" aria-hidden="true" />
+          </button>
+          <span className="text-base font-bold">Tu foto</span>
+          <span className="size-12" aria-hidden="true" />
         </div>
       </div>
 

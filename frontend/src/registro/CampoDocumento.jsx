@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Campo } from './ui';
 import { formatearRut, rutEsValido, pasaporteEsValido, enmascararDocumento } from './formato';
 
@@ -16,12 +16,13 @@ export const errorDocumento = (tipo) =>
  */
 export default function CampoDocumento({ tipo, valor, onTipo, onValor, error }) {
   const [enFoco, setEnFoco] = useState(false);
+  const inputRef = useRef(null);
   const esRut = tipo === 'CEDULA_CHILE';
   const enmascarar = !enFoco && documentoEsValido(tipo, valor);
 
   return (
     <>
-      <div role="radiogroup" aria-label="Tipo de documento" className="mb-6 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
+      <div role="radiogroup" aria-label="Tipo de documento" className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-sutil p-1">
         {[
           ['CEDULA_CHILE', 'Cédula chilena'],
           ['PASAPORTE', 'Pasaporte'],
@@ -36,8 +37,8 @@ export default function CampoDocumento({ tipo, valor, onTipo, onValor, error }) 
               onTipo(v);
               onValor('');
             }}
-            className={`h-12 rounded-xl text-[0.9375rem] font-semibold transition-colors ${
-              tipo === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+            className={`h-12 rounded-xl text-[0.9375rem] font-bold transition-colors ${
+              tipo === v ? 'bg-superficie text-tinta shadow-tarjeta' : 'text-tinta-tenue'
             }`}
           >
             {texto}
@@ -47,7 +48,9 @@ export default function CampoDocumento({ tipo, valor, onTipo, onValor, error }) 
       <Campo
         label={esRut ? 'RUT' : 'Número de pasaporte'}
         autoFocus
+        inputRef={inputRef}
         autoComplete="off"
+        inputMode={esRut ? 'numeric' : 'text'}
         autoCapitalize="characters"
         spellCheck={false}
         enterKeyHint="next"
@@ -67,8 +70,24 @@ export default function CampoDocumento({ tipo, valor, onTipo, onValor, error }) 
           enmascarar
             ? 'Lo ocultamos por seguridad. Toca el campo para verlo.'
             : esRut
-              ? 'Incluye el dígito final (puede ser K).'
+              ? 'Incluye el dígito final. Si es K, toca el botón K.'
               : undefined
+        }
+        accesorio={
+          esRut && !enmascarar ? (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (!/k$/i.test(valor)) onValor(formatearRut(`${valor}K`));
+                inputRef.current?.focus();
+              }}
+              aria-label="Agregar K como dígito final del RUT"
+              className="mr-1.5 grid h-11 min-w-11 shrink-0 place-items-center rounded-lg border border-linea-fuerte bg-fondo px-3 text-lg font-bold text-tinta hover:bg-sutil active:bg-linea"
+            >
+              K
+            </button>
+          ) : undefined
         }
       />
     </>

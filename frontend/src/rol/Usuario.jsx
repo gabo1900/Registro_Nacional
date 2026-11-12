@@ -1,21 +1,237 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
-  ShieldCheck,
+  CircleCheck,
+  CircleAlert,
+  TriangleAlert,
+  RefreshCw,
   ScanFace,
   Fingerprint,
+  History,
   FileCheck2,
   Scale,
-  History,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  Loader2,
-  Sparkles,
+  UserRound,
+  ChevronDown,
+  MapPin,
+  Send,
+  Inbox,
+  Code2,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
-import FingerprintCapture from '../componente/FingerprintCapture';
 import EnrolamientoHincha from '../registro/EnrolamientoHincha';
-import { enmascararDocumento, enmascararCorreo } from '../registro/formato';
+import { enmascararDocumento, enmascararCorreo, enmascararCelular } from '../registro/formato';
+import { Alerta, Badge, Boton, Contenedor, Desplegable, EstadoVacio, Esqueleto, Tarjeta } from '../componente/ui';
+
+/* ---------- Textos y formato ---------- */
+
+const DEDOS = {
+  INDICE_DERECHO: 'Índice derecho',
+  INDICE_IZQUIERDO: 'Índice izquierdo',
+  PULGAR_DERECHO: 'Pulgar derecho',
+  PULGAR_IZQUIERDO: 'Pulgar izquierdo',
+  MEDIO_DERECHO: 'Medio derecho',
+  MEDIO_IZQUIERDO: 'Medio izquierdo',
+};
+
+const DERECHOS = {
+  ACCESO: { titulo: 'Ver mis datos', detalle: 'Recibe una copia de los datos que tenemos sobre ti.' },
+  RECTIFICACION: { titulo: 'Corregir mis datos', detalle: 'Si algún dato está mal o cambió.' },
+  CANCELACION: { titulo: 'Borrar mis datos', detalle: 'Eliminamos tu registro en un máximo de 60 días.' },
+  OPOSICION: { titulo: 'Oponerme a un uso', detalle: 'Si no estás de acuerdo con cómo usamos tus datos.' },
+  PORTABILIDAD: { titulo: 'Llevarme mis datos', detalle: 'Recibe tus datos en un formato para usarlos en otro servicio.' },
+};
+
+const ESTADOS_ARCO = {
+  PENDIENTE: { texto: 'En revisión', tono: 'aviso' },
+  EN_PROCESO: { texto: 'En revisión', tono: 'aviso' },
+  RESPONDIDA: { texto: 'Respondida', tono: 'ok' },
+  RESUELTA: { texto: 'Respondida', tono: 'ok' },
+  COMPLETADA: { texto: 'Respondida', tono: 'ok' },
+  RECHAZADA: { texto: 'Rechazada', tono: 'error' },
+};
+
+const aFecha = (v) => {
+  if (!v) return null;
+  if (Array.isArray(v)) {
+    const [a, m = 1, d = 1, h = 0, mi = 0] = v;
+    return new Date(a, m - 1, d, h, mi);
+  }
+  const f = new Date(v);
+  return Number.isNaN(f.getTime()) ? null : f;
+};
+
+const formatearFecha = (v, conHora = false) => {
+  const f = aFecha(v);
+  if (!f) return '';
+  return f.toLocaleString('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    ...(conHora ? { hour: '2-digit', minute: '2-digit' } : {}),
+  });
+};
+
+const capitalizar = (t = '') => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase().replace(/_/g, ' ');
+
+/* ---------- Hook: ¿pantalla de celular? ---------- */
+
+function useEsCelular() {
+  const consulta = '(max-width: 767px)';
+  const [es, setEs] = useState(() => typeof window !== 'undefined' && window.matchMedia(consulta).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(consulta);
+    const alCambiar = () => setEs(mq.matches);
+    mq.addEventListener('change', alCambiar);
+    return () => mq.removeEventListener('change', alCambiar);
+  }, []);
+  return es;
+}
+
+/* ---------- Secciones: pestañas en PC/tablet, acordeón en celular ---------- */
+
+function Secciones({ secciones, activa, onCambiar }) {
+  const esCelular = useEsCelular();
+  const base = useId();
+  const tabsRef = useRef([]);
+
+  if (esCelular) {
+    return (
+      <div className="space-y-3">
+        {secciones.map((s) => {
+          const abierta = activa === s.id;
+          const Icono = s.icono;
+          return (
+            <Tarjeta key={s.id} as="div" className="overflow-hidden">
+              <h2>
+                <button
+                  type="button"
+                  id={`${base}-b-${s.id}`}
+                  aria-expanded={abierta}
+                  aria-controls={`${base}-p-${s.id}`}
+                  onClick={() => onCambiar(abierta ? null : s.id)}
+                  className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left font-bold hover:bg-fondo"
+                >
+                  <Icono className="size-5 shrink-0 text-tinta-tenue" aria-hidden="true" />
+                  <span className="flex-1">{s.titulo}</span>
+                  {s.contador !== undefined && (
+                    <span className="rounded-full bg-sutil px-2 text-sm text-tinta-suave tabular-nums">{s.contador}</span>
+                  )}
+                  <ChevronDown
+                    className={`size-5 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${abierta ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </h2>
+              {abierta && (
+                <div
+                  id={`${base}-p-${s.id}`}
+                  role="region"
+                  aria-labelledby={`${base}-b-${s.id}`}
+                  className="border-t border-linea px-4 py-5"
+                >
+                  {s.contenido}
+                </div>
+              )}
+            </Tarjeta>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const indice = Math.max(0, secciones.findIndex((s) => s.id === activa));
+  const actual = secciones[indice];
+
+  const alTeclear = (e) => {
+    const mover = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    let destino = null;
+    if (mover) destino = (indice + mover + secciones.length) % secciones.length;
+    if (e.key === 'Home') destino = 0;
+    if (e.key === 'End') destino = secciones.length - 1;
+    if (destino === null) return;
+    e.preventDefault();
+    onCambiar(secciones[destino].id);
+    tabsRef.current[destino]?.focus();
+  };
+
+  return (
+    <Tarjeta as="div">
+      <div
+        role="tablist"
+        aria-label="Secciones de tu cuenta"
+        onKeyDown={alTeclear}
+        className="flex gap-1 overflow-x-auto border-b border-linea px-2 [scrollbar-width:thin]"
+      >
+        {secciones.map((s, i) => {
+          const sel = i === indice;
+          const Icono = s.icono;
+          return (
+            <button
+              key={s.id}
+              ref={(el) => (tabsRef.current[i] = el)}
+              type="button"
+              role="tab"
+              id={`${base}-t-${s.id}`}
+              aria-selected={sel}
+              aria-controls={`${base}-p-${s.id}`}
+              tabIndex={sel ? 0 : -1}
+              onClick={() => onCambiar(s.id)}
+              className={`relative flex min-h-14 shrink-0 items-center gap-2 whitespace-nowrap px-2.5 font-bold transition-colors ${
+                sel ? 'text-marca-700' : 'text-tinta-tenue hover:text-tinta'
+              }`}
+            >
+              <Icono className="hidden size-5 2xl:block" aria-hidden="true" />
+              {s.corto || s.titulo}
+              {s.contador !== undefined && (
+                <span className={`rounded-full px-2 text-sm tabular-nums ${sel ? 'bg-marca-50' : 'bg-sutil'}`}>{s.contador}</span>
+              )}
+              {sel && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-marca-700" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${base}-p-${actual.id}`}
+        aria-labelledby={`${base}-t-${actual.id}`}
+        tabIndex={0}
+        className="p-5 sm:p-6 lg:p-8"
+      >
+        <h2 className="sr-only">{actual.titulo}</h2>
+        {actual.contenido}
+      </div>
+    </Tarjeta>
+  );
+}
+
+/* ---------- Piezas ---------- */
+
+function Dato({ etiqueta, children }) {
+  return (
+    <div className="py-3.5 sm:grid sm:grid-cols-[12rem_1fr] sm:gap-4">
+      <dt className="text-[0.9375rem] text-tinta-tenue">{etiqueta}</dt>
+      <dd className="mt-0.5 break-words font-bold tabular-nums sm:mt-0">{children || '—'}</dd>
+    </div>
+  );
+}
+
+function CargandoPanel() {
+  return (
+    <Contenedor className="py-8 lg:py-10" >
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">Cargando tu cuenta…</span>
+        <Esqueleto className="h-40 w-full rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Esqueleto className="h-24" />
+          <Esqueleto className="h-24" />
+          <Esqueleto className="h-24" />
+        </div>
+        <Esqueleto className="h-64 w-full rounded-2xl" />
+      </div>
+    </Contenedor>
+  );
+}
+
+/* ---------- Panel ---------- */
 
 export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
   const [portal, setPortal] = useState({
@@ -26,16 +242,17 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
     historialAccesos: [],
     solicitudesArco: [],
   });
-  const [activeTab, setActiveTab] = useState('credencial');
+  const [activeTab, setActiveTab] = useState('datos');
   const [loading, setLoading] = useState(true);
   const [cargaInicial, setCargaInicial] = useState(true);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [enviandoArco, setEnviandoArco] = useState(false);
 
-  // Soporte para agregar múltiples huellas (dedos alternativos)
-  const [showAddHuella, setShowAddHuella] = useState(false);
-  const [nuevaHuellaDedo, setNuevaHuellaDedo] = useState('INDICE_IZQUIERDO');
-  const [huellaSaving, setHuellaSaving] = useState(false);
+  // Las huellas se registran en un punto de enrolamiento. Esta lógica queda
+  // disponible por si se vuelve a habilitar el registro desde el dispositivo.
+  const [nuevaHuellaDedo] = useState('INDICE_IZQUIERDO');
+  const [, setHuellaSaving] = useState(false);
 
   // Form Derechos ARCO (Ley 19.628)
   const [arcoForm, setArcoForm] = useState({
@@ -45,6 +262,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
 
   const cargarPortal = async () => {
     setLoading(true);
+    setErr('');
     try {
       const data = await apiFetch('/api/hincha/perfil');
       setPortal(data);
@@ -56,6 +274,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleGuardarNuevaHuella = async (fp) => {
     setHuellaSaving(true);
     setErr('');
@@ -70,7 +289,6 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
         }),
       });
       setMsg('Huella agregada.');
-      setShowAddHuella(false);
       cargarPortal();
     } catch (e) {
       setErr(e.message);
@@ -87,30 +305,26 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
     e.preventDefault();
     setErr('');
     setMsg('');
+    setEnviandoArco(true);
     try {
       await apiFetch('/api/hincha/arco', {
         method: 'POST',
         body: JSON.stringify(arcoForm),
       });
-      setMsg('Solicitud de Derecho ARCO enviada al DPO ANFP (ifierro@anfpchile.cl) conforme al Art. 12 Ley 19.628.');
+      setMsg('Recibimos tu solicitud. La revisará el encargado de protección de datos de la ANFP y te responderá por correo.');
       setArcoForm({ tipoDerecho: 'ACCESO', fundamento: '' });
       cargarPortal();
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setEnviandoArco(false);
     }
   };
 
   const hincha = portal.hincha;
   const isEnrolled = hincha && hincha.estadoEnrolamiento === 'COMPLETADO';
 
-  if (cargaInicial) {
-    return (
-      <div className="grid min-h-[60vh] place-items-center" role="status">
-        <Loader2 className="size-8 animate-spin text-blue-700 motion-reduce:animate-none" aria-hidden="true" />
-        <span className="sr-only">Cargando tu cuenta…</span>
-      </div>
-    );
-  }
+  if (cargaInicial) return <CargandoPanel />;
 
   if (!isEnrolled && !err) {
     return (
@@ -123,397 +337,407 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
     );
   }
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Alertas */}
-      {msg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {msg}
+  // No se pudo cargar la cuenta: explicamos qué hacer.
+  if (!isEnrolled) {
+    return (
+      <Contenedor className="py-12">
+        <Tarjeta className="mx-auto max-w-lg p-6 text-center sm:p-8">
+          <span className="mx-auto grid size-14 place-items-center rounded-full bg-error-50 text-error-700" aria-hidden="true">
+            <CircleAlert className="size-8" />
           </span>
-          <button onClick={() => setMsg('')} className="font-bold text-emerald-700">✕</button>
+          <h1 className="mt-4 text-titulo-3 font-bold">No pudimos cargar tu cuenta</h1>
+          <p className="mt-2 text-tinta-tenue">
+            Puede ser la señal. Revisa tu conexión a internet y vuelve a intentar.
+          </p>
+          <p className="mt-1 text-sm text-tinta-apagada">Detalle: {err}</p>
+          <Boton tamano="lg" ancho className="mt-6" cargando={loading} onClick={cargarPortal} icono={<RefreshCw className="size-5" aria-hidden="true" />}>
+            Intentar de nuevo
+          </Boton>
+        </Tarjeta>
+      </Contenedor>
+    );
+  }
+
+  const usuario = portal.usuario || currentUser;
+  const documento = hincha?.documentoDecrypted || usuario?.rutDecrypted || '';
+  const ultimoIngreso = [...portal.historialAccesos].sort(
+    (a, b) => (aFecha(b.fechaEvento)?.getTime() || 0) - (aFecha(a.fechaEvento)?.getTime() || 0)
+  )[0];
+
+  // Estado principal: uno solo, con qué hacer.
+  const estado = hincha.tieneProhibicionActiva
+    ? {
+        tono: 'error',
+        icono: CircleAlert,
+        titulo: 'No puedes ingresar a estadios',
+        texto: 'Tienes una prohibición de ingreso vigente. Si crees que es un error, escribe a marketing@anfpchile.cl.',
+      }
+    : !hincha.livenessPassed
+      ? {
+          tono: 'aviso',
+          icono: TriangleAlert,
+          titulo: 'Falta verificar la foto de tu cara',
+          texto: 'Actualiza en unos minutos. Si no cambia, escribe a marketing@anfpchile.cl.',
+        }
+      : {
+          tono: 'ok',
+          icono: CircleCheck,
+          titulo: 'Listo para ingresar al estadio',
+          texto: 'En la entrada, mira a la cámara o muestra tu cédula.',
+        };
+
+  const COLORES_ESTADO = {
+    ok: { caja: 'border-ok-200', icono: 'bg-ok-50 text-ok-700' },
+    aviso: { caja: 'border-aviso-200', icono: 'bg-aviso-50 text-aviso-700' },
+    error: { caja: 'border-error-200', icono: 'bg-error-50 text-error-700' },
+  }[estado.tono];
+  const IconoEstado = estado.icono;
+
+  const resumen = [
+    {
+      etiqueta: 'Estadio principal',
+      valor: usuario?.tenantNombre || 'ANFP',
+      icono: MapPin,
+    },
+    {
+      etiqueta: 'Huellas registradas',
+      valor: portal.huellas.length === 0 ? 'Ninguna' : portal.huellas.length,
+      icono: Fingerprint,
+      ir: 'huellas',
+    },
+    {
+      etiqueta: 'Último ingreso',
+      valor: ultimoIngreso ? formatearFecha(ultimoIngreso.fechaEvento) || ultimoIngreso.puertaAcceso : 'Aún no registras',
+      icono: History,
+      ir: 'historial',
+    },
+  ];
+
+  const secciones = [
+    {
+      id: 'datos',
+      titulo: 'Mis datos',
+      icono: UserRound,
+      contenido: (
+        <div>
+          <p className="text-tinta-tenue">Ocultamos parte de tus datos por seguridad.</p>
+          <dl className="mt-3 divide-y divide-linea border-y border-linea">
+            <Dato etiqueta="Nombre">{usuario?.nombreCompleto}</Dato>
+            <Dato etiqueta="RUT o pasaporte">{enmascararDocumento(documento)}</Dato>
+            <Dato etiqueta="Correo">{enmascararCorreo(usuario?.email || '')}</Dato>
+            {usuario?.telefonoDecrypted && <Dato etiqueta="Celular">{enmascararCelular(usuario.telefonoDecrypted)}</Dato>}
+            <Dato etiqueta="Estadio principal">{usuario?.tenantNombre}</Dato>
+          </dl>
+          <p className="mt-4 text-[0.9375rem] text-tinta-tenue">
+            ¿Algún dato está mal?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setArcoForm((f) => ({ ...f, tipoDerecho: 'RECTIFICACION' }));
+                setActiveTab('arco');
+              }}
+              className="min-h-11 font-bold text-marca-700 underline decoration-marca-200 hover:decoration-marca-700"
+            >
+              Pide corregirlo
+            </button>
+          </p>
         </div>
+      ),
+    },
+    {
+      id: 'huellas',
+      titulo: 'Huellas',
+      icono: Fingerprint,
+      contador: portal.huellas.length,
+      contenido: (
+        <div className="space-y-5">
+          <Alerta tono="info" titulo="Las huellas se registran en persona">
+            Se toman en un punto de enrolamiento del estadio, no desde el celular. Sirven de respaldo si la cámara de la
+            entrada no te reconoce. Si un dedo se lesiona, puedes entrar con otro.
+          </Alerta>
+          {portal.huellas.length === 0 ? (
+            <EstadoVacio icono={Fingerprint} titulo="Aún no tienes huellas registradas">
+              No es obligatorio. Puedes entrar al estadio solo con tu cara o tu cédula.
+            </EstadoVacio>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {portal.huellas.map((h) => (
+                <li key={h.id} className="flex items-center gap-3 rounded-xl border border-linea p-4">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-700" aria-hidden="true">
+                    <Fingerprint className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold">{DEDOS[h.dedoIndice] || capitalizar(h.dedoIndice || 'Huella')}</p>
+                    {h.createdAt && <p className="text-sm text-tinta-tenue">Desde el {formatearFecha(h.createdAt)}</p>}
+                  </div>
+                  {h.activo === false ? <Badge tono="neutro">Inactiva</Badge> : <Badge tono="ok">Activa</Badge>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'historial',
+      titulo: 'Historial de ingresos',
+      corto: 'Ingresos',
+      icono: History,
+      contador: portal.historialAccesos.length,
+      contenido:
+        portal.historialAccesos.length === 0 ? (
+          <EstadoVacio icono={History} titulo="Aún no registras ingresos">
+            Cuando entres a un estadio, aparecerá aquí con la fecha y la puerta.
+          </EstadoVacio>
+        ) : (
+          <ul className="divide-y divide-linea border-y border-linea">
+            {portal.historialAccesos.map((a) => {
+              const ok = a.resultado === 'AUTORIZADO';
+              return (
+                <li key={a.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="font-bold">
+                      {a.tenantNombre ? `${a.tenantNombre} · ` : ''}
+                      {a.puertaAcceso}
+                    </p>
+                    <p className="text-[0.9375rem] text-tinta-tenue">
+                      {[formatearFecha(a.fechaEvento, true), a.tipoOperacion && capitalizar(a.tipoOperacion)].filter(Boolean).join(' · ')}
+                    </p>
+                    {!ok && a.detalleMensaje && <p className="mt-1 text-[0.9375rem] text-error-800">{a.detalleMensaje}</p>}
+                  </div>
+                  <Badge tono={ok ? 'ok' : 'error'} className="self-start sm:self-auto">
+                    {ok ? 'Autorizado' : 'No autorizado'}
+                  </Badge>
+                </li>
+              );
+            })}
+          </ul>
+        ),
+    },
+    {
+      id: 'consentimiento',
+      titulo: 'Consentimiento',
+      icono: FileCheck2,
+      contenido: portal.consentimiento ? (
+        <div className="space-y-5">
+          <dl className="divide-y divide-linea border-y border-linea">
+            <Dato etiqueta="Términos aceptados">Versión {portal.consentimiento.versionTerminos}</Dato>
+            <Dato etiqueta="Uso de tu cara">Autorizado</Dato>
+            {portal.consentimiento.fechaAceptacion && (
+              <Dato etiqueta="Fecha">{formatearFecha(portal.consentimiento.fechaAceptacion)}</Dato>
+            )}
+          </dl>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Boton variante="secundario" onClick={onOpenTerms} icono={<FileCheck2 className="size-5" aria-hidden="true" />}>
+              Leer los términos
+            </Boton>
+          </div>
+          {portal.consentimiento.hashDocumentoLegal && (
+            <Desplegable titulo="Detalles técnicos" icono={Code2}>
+              <p>Huella digital del documento que aceptaste (sirve para comprobar que no ha cambiado):</p>
+              <p className="mt-2 break-all rounded-lg bg-fondo p-3 font-mono text-sm text-tinta-suave">
+                {portal.consentimiento.hashDocumentoLegal}
+              </p>
+            </Desplegable>
+          )}
+        </div>
+      ) : (
+        <EstadoVacio icono={FileCheck2} titulo="No encontramos tu consentimiento">
+          Actualiza la página. Si sigue sin aparecer, escribe a marketing@anfpchile.cl.
+        </EstadoVacio>
+      ),
+    },
+    {
+      id: 'arco',
+      titulo: 'Derechos ARCO',
+      icono: Scale,
+      contador: portal.solicitudesArco.length || undefined,
+      contenido: (
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+          <form onSubmit={handleEnviarArco} className="space-y-5">
+            <div>
+              <h3 className="text-lg font-bold">Haz una solicitud sobre tus datos</h3>
+              <p className="mt-1 text-[0.9375rem] text-tinta-tenue">
+                Es gratis. Lo revisa el encargado de protección de datos de la ANFP (Ley N° 19.628, art. 12).
+              </p>
+            </div>
+            <fieldset>
+              <legend className="mb-2 font-bold">¿Qué quieres hacer?</legend>
+              <div className="space-y-2">
+                {Object.entries(DERECHOS).map(([valor, d]) => {
+                  const sel = arcoForm.tipoDerecho === valor;
+                  return (
+                    <label
+                      key={valor}
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
+                        sel ? 'border-marca-700 bg-marca-50 ring-1 ring-marca-700' : 'border-linea hover:border-linea-fuerte hover:bg-fondo'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="tipoDerecho"
+                        value={valor}
+                        checked={sel}
+                        onChange={() => setArcoForm({ ...arcoForm, tipoDerecho: valor })}
+                        className="mt-1 size-5 shrink-0 accent-marca-700"
+                      />
+                      <span>
+                        <span className="block font-bold">{d.titulo}</span>
+                        <span className="block text-[0.9375rem] text-tinta-tenue">{d.detalle}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div className="space-y-2">
+              <label htmlFor="arco-fundamento" className="block font-bold">
+                Cuéntanos el motivo
+              </label>
+              <textarea
+                id="arco-fundamento"
+                rows={4}
+                required
+                value={arcoForm.fundamento}
+                onChange={(e) => setArcoForm({ ...arcoForm, fundamento: e.target.value })}
+                placeholder="Por ejemplo: mi segundo apellido está mal escrito."
+                className="w-full rounded-xl border border-linea-fuerte bg-superficie px-4 py-3 text-campo outline-none transition-colors placeholder:text-tinta-apagada hover:border-tinta-apagada focus:border-marca-700 focus:ring-3 focus:ring-marca-700/15"
+              />
+            </div>
+            <Boton type="submit" tamano="lg" ancho cargando={enviandoArco} icono={<Send className="size-5" aria-hidden="true" />}>
+              {enviandoArco ? 'Enviando…' : 'Enviar solicitud'}
+            </Boton>
+          </form>
+
+          <div>
+            <h3 className="text-lg font-bold">Mis solicitudes</h3>
+            {portal.solicitudesArco.length === 0 ? (
+              <div className="mt-3">
+                <EstadoVacio icono={Inbox} titulo="No has hecho solicitudes">
+                  Cuando envíes una, verás aquí su estado y la respuesta.
+                </EstadoVacio>
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {portal.solicitudesArco.map((s) => {
+                  const est = ESTADOS_ARCO[s.estado] || { texto: capitalizar(s.estado || 'En revisión'), tono: 'neutro' };
+                  return (
+                    <li key={s.id} className="rounded-xl border border-linea p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="font-bold">{DERECHOS[s.tipoDerecho]?.titulo || capitalizar(s.tipoDerecho)}</p>
+                        <Badge tono={est.tono}>{est.texto}</Badge>
+                      </div>
+                      {s.createdAt && <p className="text-sm text-tinta-tenue">Enviada el {formatearFecha(s.createdAt)}</p>}
+                      <p className="mt-2 text-[0.9375rem] text-tinta-suave">{s.fundamento}</p>
+                      {s.respuestaDpo && (
+                        <div className="mt-3 rounded-lg bg-fondo p-3 text-[0.9375rem]">
+                          <p className="font-bold">Respuesta</p>
+                          <p className="text-tinta-suave">{s.respuestaDpo}</p>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Contenedor className="space-y-6 py-6 sm:py-8 lg:py-10">
+      <h1 className="sr-only">Mi panel</h1>
+
+      {msg && (
+        <Alerta tono="ok" onCerrar={() => setMsg('')}>
+          {msg}
+        </Alerta>
       )}
       {err && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" /> {err}
-          </span>
-          <button onClick={() => setErr('')} className="font-bold text-red-700">✕</button>
-        </div>
+        <Alerta tono="error" titulo="Algo no funcionó" onCerrar={() => setErr('')}>
+          {err} Revisa tu conexión e intenta de nuevo.
+        </Alerta>
       )}
 
-
-      {/* CASO B: USUARIO YA VERIFICADO Y ENROLADO (CREDENCIAL DIGITAL ACTIVA) */}
-      {isEnrolled && (
-        <>
-          {/* Banner Credencial Digital RNH */}
-          <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-800 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-            <div className="lg:col-span-8 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-sm font-semibold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" />
-                  Registro activo
-                </span>
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 text-sm">
-                  {portal.usuario?.tenantNombre || 'ANFP Central'}
-                </span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl font-extrabold">
-                {portal.usuario?.nombreCompleto}
-              </h1>
-              <p className="text-sm text-slate-300 tabular-nums">
-                {enmascararCorreo(portal.usuario?.email || '')}
-                {' · '}
-                <span className="text-white">
-                  {enmascararDocumento(hincha?.documentoDecrypted || portal.usuario?.rutDecrypted || '')}
-                </span>
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-xs text-slate-400">Registro</div>
-                  <div className="text-sm font-semibold text-emerald-400 mt-0.5">Completo</div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-xs text-slate-400">Foto de tu cara</div>
-                  <div className="text-sm font-semibold text-white mt-0.5">
-                    {hincha.livenessPassed ? 'Verificada' : 'Pendiente'}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-xs text-slate-400">Huellas</div>
-                  <div className="text-sm font-semibold text-white mt-0.5">
-                    {portal.huellas.length === 0 ? 'Ninguna' : portal.huellas.length}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-xs text-slate-400">Ingreso a estadios</div>
-                  <div
-                    className={`text-sm font-semibold mt-0.5 ${
-                      hincha.tieneProhibicionActiva ? 'text-red-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    {hincha.tieneProhibicionActiva ? 'Con prohibición' : 'Habilitado'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Digital Pass Card */}
-            <div className="lg:col-span-4 bg-slate-950/90 rounded-2xl p-5 border border-slate-800 text-center space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Pase Oficial Fútbol Chileno
-              </div>
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-500 to-blue-600 flex items-center justify-center shadow-lg">
-                <ScanFace className="w-14 h-14 text-white" />
-              </div>
-              <div className="text-sm font-semibold text-emerald-400">
-                Mira a la cámara en la entrada
-              </div>
-              <button
-                onClick={cargarPortal}
-                className="text-[11px] text-slate-400 hover:text-white inline-flex items-center gap-1"
-              >
-                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Actualizar
-              </button>
+      <div className="grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start xl:grid-cols-[24rem_minmax(0,1fr)]">
+        {/* Pase: estado principal + identidad */}
+        <Tarjeta className={`p-6 lg:sticky lg:top-24 ${COLORES_ESTADO.caja}`} aria-labelledby="estado-pase">
+          <div className="flex items-start gap-4 lg:flex-col">
+            <span className={`grid size-14 shrink-0 place-items-center rounded-full lg:size-16 ${COLORES_ESTADO.icono}`} aria-hidden="true">
+              <IconoEstado className="size-8 lg:size-9" />
+            </span>
+            <div>
+              <h2 id="estado-pase" className="text-titulo-3 font-bold leading-tight lg:text-titulo-2">
+                {estado.titulo}
+              </h2>
+              <p className="mt-1.5 text-[1.0625rem] leading-relaxed text-tinta-suave">{estado.texto}</p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-            <button
-              onClick={() => setActiveTab('credencial')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'credencial'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <FileCheck2 className="w-4 h-4" />
-              Mi Consentimiento y Estado Legal
-            </button>
-
-            <button
-              onClick={() => setActiveTab('historial')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'historial'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              Historial de Ingresos al Estadio ({portal.historialAccesos.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('huella')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'huella'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <Fingerprint className="w-4 h-4" />
-              Mis Huellas Digitales ({portal.huellas.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('arco')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'arco'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <Scale className="w-4 h-4" />
-              Derechos ARCO (Ley N° 19.628)
-            </button>
+          <div className="mt-6 border-t border-linea pt-5">
+            <p className="text-lg font-bold break-words">{usuario?.nombreCompleto}</p>
+            <p className="mt-0.5 text-tinta-tenue tabular-nums">{enmascararDocumento(documento)}</p>
           </div>
 
-          {/* TAB 1: CERTIFICADO DE CONSENTIMIENTO */}
-          {activeTab === 'credencial' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Certificado de Consentimiento Informado y Protección de Datos (ANFP)
-                </h3>
-                <button
-                  onClick={onOpenTerms}
-                  className="text-xs font-bold text-blue-600 hover:underline"
-                >
-                  Ver Texto Completo de Términos y Condiciones
-                </button>
-              </div>
-
-              {portal.consentimiento ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Versión Términos Aceptada:</span>
-                    <span className="font-bold text-slate-900">
-                      {portal.consentimiento.versionTerminos}
-                    </span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Consentimiento Biométrico Expreso:</span>
-                    <span className="font-bold text-emerald-700">
-                      ACEPTADO (Art. 2.g Ley N° 19.628)
-                    </span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Firma Hash de Integridad Legal:</span>
-                    <span className="font-mono text-[11px] text-slate-700 break-all">
-                      {portal.consentimiento.hashDocumentoLegal}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+          {estado.tono === 'ok' && (
+            <p className="mt-5 flex items-center gap-2.5 rounded-xl bg-marca-50 px-3.5 py-3 font-bold text-marca-900">
+              <ScanFace className="size-6 shrink-0" aria-hidden="true" />
+              Tu cara es tu entrada
+            </p>
           )}
 
-          {/* TAB 2: HISTORIAL DE INGRESOS */}
-          {activeTab === 'historial' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-base font-extrabold text-slate-900">
-                Mis Verificaciones en Puertas de Estadio y Ticketeras
-              </h3>
-              {portal.historialAccesos.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  Aún no registras ingresos en puertas de estadio.
-                </p>
-              ) : (
-                <div className="space-y-2 text-xs">
-                  {portal.historialAccesos.map((a) => (
-                    <div
-                      key={a.id}
-                      className="p-3.5 rounded-xl border border-slate-200 flex items-center justify-between"
+          <Boton
+            variante="texto"
+            tamano="sm"
+            className="-ml-3 mt-4"
+            onClick={cargarPortal}
+            disabled={loading}
+            icono={<RefreshCw className={`size-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true" />}
+          >
+            {loading ? 'Actualizando…' : 'Actualizar'}
+          </Boton>
+        </Tarjeta>
+
+        <div className="min-w-0 space-y-6">
+          {/* Resumen en fila */}
+          {/* Celular: una lista compacta. Tablet y PC: tres tarjetas en fila. */}
+          <ul className="divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-superficie shadow-tarjeta sm:grid sm:grid-cols-3 sm:gap-3 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none">
+            {resumen.map((r) => {
+              const Icono = r.icono;
+              const contenido = (
+                <>
+                  <Icono className="size-5 shrink-0 text-tinta-tenue" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 sm:mt-3 sm:block">
+                    <span className="block text-[0.9375rem] text-tinta-tenue">{r.etiqueta}</span>
+                    <span className="mt-0.5 block font-bold break-words">{r.valor}</span>
+                  </span>
+                </>
+              );
+              const caja =
+                'flex h-full w-full items-center gap-3 px-4 py-3.5 text-left sm:block sm:rounded-2xl sm:border sm:border-linea sm:bg-superficie sm:p-4 sm:shadow-tarjeta';
+              return (
+                <li key={r.etiqueta}>
+                  {r.ir ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(r.ir)}
+                      className={`${caja} transition-colors hover:bg-fondo sm:hover:border-linea-fuerte`}
                     >
-                      <div>
-                        <div className="font-bold text-slate-900">
-                          {a.puertaAcceso} ({a.tipoOperacion})
-                        </div>
-                        <div className="text-slate-500">{a.detalleMensaje}</div>
-                      </div>
-                      <span
-                        className={`px-2.5 py-1 rounded-full font-bold ${
-                          a.resultado === 'AUTORIZADO'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {a.resultado}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 3: HUELLAS DIGITALES (MÚLTIPLES DEDOS REGISTRABLES) */}
-          {activeTab === 'huella' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                    <Fingerprint className="w-5 h-5 text-blue-600" />
-                    Mis Credenciales de Huella Digital Almacenadas ({portal.huellas.length})
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Puedes tener registrados <strong>múltiples dedos</strong> (índice derecho, izquierdo, pulgares). Si un dedo sufre una lesión, podrás ingresar con tus otros dedos en el torniquete.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddHuella(!showAddHuella)}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-md transition self-start sm:self-auto"
-                >
-                  <Fingerprint className="w-4 h-4" />
-                  {showAddHuella ? 'Cerrar Enrolador' : '+ Enrolar Otro Dedo'}
-                </button>
-              </div>
-
-              {/* SECCIÓN DESPLEGABLE: ENROLAR OTRA HUELLA */}
-              {showAddHuella && (
-                <div className="p-5 rounded-2xl bg-slate-50 border-2 border-blue-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      Agregar otra huella
-                    </h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-700 text-xs mb-1">
-                        Selecciona el dedo a registrar:
-                      </label>
-                      <select
-                        value={nuevaHuellaDedo}
-                        onChange={(e) => setNuevaHuellaDedo(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white text-xs font-semibold"
-                      >
-                        <option value="INDICE_DERECHO">Índice Mano Derecha</option>
-                        <option value="INDICE_IZQUIERDO">Índice Mano Izquierda</option>
-                        <option value="PULGAR_DERECHO">Pulgar Mano Derecha</option>
-                        <option value="PULGAR_IZQUIERDO">Pulgar Mano Izquierda</option>
-                        <option value="MEDIO_DERECHO">Dedo Medio Mano Derecha</option>
-                        <option value="MEDIO_IZQUIERDO">Dedo Medio Mano Izquierda</option>
-                      </select>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 flex items-center">
-                      Toca el botón de abajo y pon tu dedo en el lector de huella de tu celular.
-                    </div>
-                  </div>
-
-                  <FingerprintCapture
-                    onFingerprintCaptured={(fp) => handleGuardarNuevaHuella(fp)}
-                  />
-                  {huellaSaving && (
-                    <div className="text-center text-xs text-blue-600 font-bold flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando tu huella…
-                    </div>
+                      {contenido}
+                    </button>
+                  ) : (
+                    <div className={caja}>{contenido}</div>
                   )}
-                </div>
-              )}
+                </li>
+              );
+            })}
+          </ul>
 
-              {/* LISTA DE HUELLAS REGISTRADAS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {portal.huellas.length === 0 ? (
-                  <div className="col-span-2 text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    No tienes huellas registradas aún. Haz clic en "+ Enrolar Otro Dedo" para agregar una.
-                  </div>
-                ) : (
-                  portal.huellas.map((h) => (
-                    <div
-                      key={h.id}
-                      className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 shadow-sm hover:border-blue-300 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          {h.dedoIndice ? h.dedoIndice.replace('_', ' ') : 'HUELLA REGISTRADA'}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-xs">
-                          Activa
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: DERECHOS ARCO */}
-          {activeTab === 'arco' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <form
-                onSubmit={handleEnviarArco}
-                className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 text-xs"
-              >
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Ejercer Derechos ARCO (Cláusula 5.7 • Art. 12 Ley N° 19.628)
-                </h3>
-                <p className="text-slate-500">
-                  Solicitud gratuita dirigida al Delegado de Protección de Datos (DPO) de la ANFP (
-                  <code className="text-blue-600">ifierro@anfpchile.cl</code>).
-                </p>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Derecho a Ejercer *</label>
-                  <select
-                    value={arcoForm.tipoDerecho}
-                    onChange={(e) => setArcoForm({ ...arcoForm, tipoDerecho: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  >
-                    <option value="ACCESO">Derecho de Acceso (Art. 12 Ley 19.628)</option>
-                    <option value="RECTIFICACION">Derecho de Rectificación de Datos</option>
-                    <option value="CANCELACION">Derecho de Cancelación / Eliminación (Máx. 60 días)</option>
-                    <option value="OPOSICION">Derecho de Oposición al Tratamiento</option>
-                    <option value="PORTABILIDAD">Derecho a la Portabilidad de Datos</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fundamento *</label>
-                  <textarea
-                    rows="3"
-                    required
-                    value={arcoForm.fundamento}
-                    onChange={(e) => setArcoForm({ ...arcoForm, fundamento: e.target.value })}
-                    placeholder="Describa el motivo de su solicitud..."
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow"
-                >
-                  Enviar Solicitud Formal al DPO
-                </button>
-              </form>
-
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3 text-xs">
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Mis Solicitudes ARCO Registradas ({portal.solicitudesArco.length})
-                </h3>
-                {portal.solicitudesArco.map((s) => (
-                  <div key={s.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="flex justify-between font-bold">
-                      <span>Derecho de {s.tipoDerecho}</span>
-                      <span className="text-indigo-600">{s.estado}</span>
-                    </div>
-                    <p className="text-slate-600">{s.fundamento}</p>
-                    <p className="text-[11px] text-emerald-700">{s.respuestaDpo}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+          <Secciones secciones={secciones} activa={activeTab} onCambiar={setActiveTab} />
+        </div>
+      </div>
+    </Contenedor>
   );
 }
