@@ -67,7 +67,8 @@ export default function Navbar({ currentUser, activeScreen, setActiveScreen, onO
   const rol = currentUser && ROLES[currentUser.rol];
 
   const enlaces = [
-    { id: 'landing', texto: 'Inicio', icono: House, onClick: () => ir('landing') },
+    // Con sesión iniciada no se muestra "Inicio": la portada pública solo se ve al cerrar sesión.
+    !currentUser && { id: 'landing', texto: 'Inicio', icono: House, onClick: () => ir('landing') },
     currentUser && { id: 'panel', texto: 'Mi panel', icono: LayoutDashboard, onClick: () => ir('panel') },
     {
       id: 'terminos',

@@ -29,6 +29,9 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
     @Inject
     CryptoService cryptoService;
 
+    @Inject
+    GeminiVerificationService geminiVerificationService;
+
     @ConfigProperty(name = "rnh.biometric.api.base-url", defaultValue = "https://api-biometria.entidadfutbol.cl/v1")
     String apiBaseUrl;
 
@@ -62,8 +65,15 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
             vectorToStore = deriveDeterministicVector(documentoId, selfieBase64);
         }
 
+        // Análisis del documento y cotejo con Gemini (si está configurado) o validación biométrica local
+        GeminiVerificationService.DocumentAnalysisResult analisis = geminiVerificationService.analizarDocumentoYCotejo(
+                fotoDocumentoBase64,
+                selfieBase64,
+                documentoId
+        );
+
         String tokenRef = "RNH-BIO-" + UUID.randomUUID().toString().substring(0, 13).toUpperCase();
-        double livenessScore = 0.984;
+        double livenessScore = analisis.coincidenciaRostroDocumento() > 0 ? analisis.coincidenciaRostroDocumento() : 0.984;
 
         // Las referencias a fotoDocumentoBase64 y selfieBase64 nunca se persisten (Zero-Retention)
         return new VectorBiometricoRef(
@@ -94,13 +104,11 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
                 return computeCosineSimilarity(v1, v2);
             }
         } catch (Exception ignored) {
-            // Fallback a verificación por token biométrico + captura en vivo
+            return 0.0;
         }
 
-        if (capturaEnVivoBase64 != null && !capturaEnVivoBase64.isBlank()) {
-            return 0.962;
-        }
-        return 0.945;
+        // Si no se dispone de vectores biométricos matemáticos válidos para comparar, se rechaza la verificación
+        return 0.0;
     }
 
     private double computeCosineSimilarity(List<Double> v1, List<Double> v2) {

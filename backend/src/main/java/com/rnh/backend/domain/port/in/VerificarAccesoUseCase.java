@@ -17,7 +17,9 @@ public interface VerificarAccesoUseCase {
             String documentoEnmascarado,
             String biometricTokenRef,
             String codigoProhibicion,
-            String puertaAcceso
+            String puertaAcceso,
+            String fotoDocumentoBase64,
+            String fotoRostroBase64
     ) {}
 
     ResultadoVerificacion verificarAccesoEnPuerta(

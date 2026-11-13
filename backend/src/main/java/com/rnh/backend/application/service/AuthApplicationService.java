@@ -16,6 +16,7 @@ import com.rnh.backend.domain.vo.RutDocumento;
 import com.rnh.backend.domain.vo.VectorBiometricoRef;
 import com.rnh.backend.infrastructure.security.CryptoService;
 import com.rnh.backend.infrastructure.security.JwtTokenService;
+import com.rnh.backend.infrastructure.security.SuperAdminPolicy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -49,6 +50,9 @@ public class AuthApplicationService implements AuthUseCase {
 
     @Inject
     JwtTokenService jwtTokenService;
+
+    @Inject
+    SuperAdminPolicy superAdminPolicy;
 
     @Override
     @Transactional
@@ -135,9 +139,8 @@ public class AuthApplicationService implements AuthUseCase {
             usuario = existentes.get(0);
         }
 
-        boolean isSuperAdminEmail = "yanezgabriel787@gmail.com".equalsIgnoreCase(googleUser.email())
-                || "yanezgabriel3416@gmail.com".equalsIgnoreCase(googleUser.email())
-                || "yanezgabriel78910@gmail.com".equalsIgnoreCase(googleUser.email());
+        // Coincidencia EXACTA del correo completo contra la lista configurada (rnh.security.super-admin-emails).
+        boolean isSuperAdminEmail = superAdminPolicy.esSuperAdmin(googleUser.email());
 
         if (usuario == null) {
             // Provisión automática en el tenant seleccionado para nuevo usuario verificado por Google

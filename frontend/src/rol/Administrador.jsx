@@ -14,6 +14,7 @@ import {
   Fingerprint,
   Activity,
   X,
+  IdCard,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
 import BiometricCamera from '../componente/BiometricCamera';
@@ -47,7 +48,7 @@ export default function Administrador({ currentUser }) {
 
   // Estado Terminal de Puerta Biométrico
   const [gateForm, setGateForm] = useState({
-    documentoRut: '18.543.210-K',
+    documentoRut: '',
     huellaCredentialId: '',
     modoVerificacion: 'CONTROL_PUERTA_FACIAL',
     puertaAcceso: 'Puerta Andes Norte - Torniquete Biométrico 01',
@@ -56,8 +57,13 @@ export default function Administrador({ currentUser }) {
   });
   const [gateResult, setGateResult] = useState(null);
 
+  // Estado Enrolamiento de Huella y Búsqueda de Hincha
+  const [buscarRutHincha, setBuscarRutHincha] = useState('');
+  const [hinchaEncontrado, setHinchaEncontrado] = useState(null);
+  const [enrolandoHuella, setEnrolandoHuella] = useState(false);
+
   // Estado Ticketera
-  const [ticketeraRut, setTicketeraRut] = useState('18.543.210-K');
+  const [ticketeraRut, setTicketeraRut] = useState('');
   const [ticketeraResult, setTicketeraResult] = useState(null);
 
   // Estado Nueva Prohibición (Derecho de Admisión)
@@ -161,6 +167,88 @@ export default function Administrador({ currentUser }) {
       cargarDatosTenant();
     } catch (err) {
       setErrorMsg(err.message);
+    }
+  };
+
+  const handleBuscarHincha = async (rutABuscar) => {
+    const rut = rutABuscar || buscarRutHincha;
+    if (!rut) return;
+    setErrorMsg('');
+    try {
+      const resp = await apiFetch(`/api/tenant/hinchas/buscar?rut=${encodeURIComponent(rut.trim())}`);
+      setHinchaEncontrado(resp);
+      // Prellenar gateForm con este RUT
+      setGateForm((prev) => ({ ...prev, documentoRut: resp.rutNormalizado || rut }));
+    } catch (err) {
+      setErrorMsg(err.message || 'No se encontró hincha con ese RUT.');
+      setHinchaEncontrado(null);
+    }
+  };
+
+  const handleEnrolarHuellaDispositivo = async () => {
+    if (!hinchaEncontrado?.hincha) {
+      return setErrorMsg('Primero debes buscar un hincha por RUT para enrolarle la huella.');
+    }
+    setErrorMsg('');
+    setEnrolandoHuella(true);
+    try {
+      if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+        throw new Error('Este dispositivo o navegador no cuenta con soporte para sensor biométrico (WebAuthn/FIDO2).');
+      }
+
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const userId = crypto.getRandomValues(new Uint8Array(16));
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: 'Registro Nacional de Hinchas ANFP', id: window.location.hostname },
+          user: {
+            id: userId,
+            name: hinchaEncontrado.rutNormalizado,
+            displayName: `${hinchaEncontrado.hincha.nombres} ${hinchaEncontrado.hincha.apellidos || ''}`.trim(),
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: 'public-key' },
+            { alg: -257, type: 'public-key' },
+          ],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+          timeout: 60000,
+        },
+      });
+
+      if (!cred) throw new Error('Lectura biométrica cancelada o no completada.');
+
+      const aBase64 = (buf) =>
+        btoa(String.fromCharCode(...new Uint8Array(buf)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+
+      const credId = cred.id || aBase64(cred.rawId);
+      const pubKey = cred.response?.attestationObject
+        ? aBase64(cred.response.attestationObject)
+        : `FIDO2_PUBKEY_${Date.now()}`;
+
+      await apiFetch('/api/tenant/hinchas/enrolar-huella', {
+        method: 'POST',
+        body: JSON.stringify({
+          rut: hinchaEncontrado.rutNormalizado,
+          hinchaId: hinchaEncontrado.hincha.id,
+          credentialId: `FIDO2-${credId.substring(0, 30)}`,
+          publicKey: pubKey,
+          dispositivoTipo: 'Sensor Biométrico FIDO2 / Dispositivo Oficial',
+          dedoIndice: 'INDICE_DERECHO',
+        }),
+      });
+
+      setSuccessMsg(`¡Huella biométrica enrolada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
+      // Refrescar ficha del hincha
+      handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+      cargarDatosTenant();
+    } catch (err) {
+      setErrorMsg(err.message || 'Error al capturar la huella biométrica.');
+    } finally {
+      setEnrolandoHuella(false);
     }
   };
 
@@ -289,6 +377,21 @@ export default function Administrador({ currentUser }) {
         >
           <ScanFace className="w-4 h-4" />
           Terminal Biométrico en Puerta (Rostro / Huella)
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('enrolamiento');
+            if (gateForm.documentoRut && !hinchaEncontrado) handleBuscarHincha(gateForm.documentoRut);
+          }}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+            activeTab === 'enrolamiento'
+              ? 'bg-purple-600 text-white shadow'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Fingerprint className="w-4 h-4" />
+          Enrolar Biometría y Huella
         </button>
 
         <button
@@ -457,13 +560,23 @@ export default function Administrador({ currentUser }) {
                 <label className="block font-bold text-slate-700 mb-1">
                   RUT / Documento del Asistente
                 </label>
-                <input
-                  type="text"
-                  value={gateForm.documentoRut}
-                  onChange={(e) => setGateForm({ ...gateForm, documentoRut: e.target.value })}
-                  placeholder="Ej: 18.543.210-K"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={gateForm.documentoRut}
+                    onChange={(e) => setGateForm({ ...gateForm, documentoRut: e.target.value })}
+                    placeholder="Ej: 18.543.210-K (O vacío para 1:N)"
+                    className="flex-1 rounded-xl border border-slate-300 px-3 py-2 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleBuscarHincha(gateForm.documentoRut)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs"
+                    title="Ver ficha y cédula registrada del hincha"
+                  >
+                    Ver DNI
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -480,6 +593,34 @@ export default function Administrador({ currentUser }) {
                 />
               </div>
             </div>
+
+            {/* Ficha rápida si se consultó el DNI */}
+            {hinchaEncontrado && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span>Ficha Registrada: {hinchaEncontrado.hincha?.nombres} {hinchaEncontrado.hincha?.apellidos}</span>
+                  <span className="font-mono text-blue-700">{hinchaEncontrado.rutEnmascarado}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                  <div>
+                    <span className="text-[11px] text-slate-500 block mb-1">Foto Cédula (DNI):</span>
+                    {hinchaEncontrado.fotoDocumentoBase64 ? (
+                      <img src={hinchaEncontrado.fotoDocumentoBase64} alt="Cédula" className="h-20 w-full object-cover rounded-lg border border-slate-300" />
+                    ) : (
+                      <div className="h-20 rounded-lg bg-slate-200 grid place-items-center text-slate-400">Sin foto de cédula</div>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-500 block mb-1">Selfie Enrolada:</span>
+                    {hinchaEncontrado.fotoRostroBase64 ? (
+                      <img src={hinchaEncontrado.fotoRostroBase64} alt="Rostro" className="h-20 w-full object-cover rounded-lg border border-slate-300" />
+                    ) : (
+                      <div className="h-20 rounded-lg bg-slate-200 grid place-items-center text-slate-400">Sin selfie registrada</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {gateForm.modoVerificacion === 'CONTROL_PUERTA_FACIAL' && (
               <BiometricCamera
@@ -560,6 +701,41 @@ export default function Administrador({ currentUser }) {
                       </span>
                     </div>
                   </div>
+
+                  {/* Comparación Visual: Cédula Guardada vs Selfie Guardada vs Cámara en Vivo */}
+                  {(gateResult.fotoDocumentoBase64 || gateResult.fotoRostroBase64 || gateForm.capturaEnVivoBase64) && (
+                    <div className="pt-3 border-t border-white/10 space-y-2">
+                      <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                        Contraste Visual en Puerta (DNI vs Rostro Guardado vs Cámara en Vivo)
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                        <div>
+                          <span className="block text-slate-400 mb-1">Cédula (DNI)</span>
+                          {gateResult.fotoDocumentoBase64 ? (
+                            <img src={gateResult.fotoDocumentoBase64} alt="Cédula" className="h-16 w-full object-cover rounded-lg border border-slate-700 mx-auto" />
+                          ) : (
+                            <div className="h-16 rounded-lg bg-slate-800 border border-slate-700 grid place-items-center text-slate-500">Sin foto DNI</div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="block text-slate-400 mb-1">Selfie Guardada</span>
+                          {gateResult.fotoRostroBase64 ? (
+                            <img src={gateResult.fotoRostroBase64} alt="Selfie" className="h-16 w-full object-cover rounded-lg border border-slate-700 mx-auto" />
+                          ) : (
+                            <div className="h-16 rounded-lg bg-slate-800 border border-slate-700 grid place-items-center text-slate-500">Sin selfie</div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="block text-slate-400 mb-1">En Vivo (Cámara)</span>
+                          {gateForm.capturaEnVivoBase64 ? (
+                            <img src={gateForm.capturaEnVivoBase64} alt="En vivo" className="h-16 w-full object-cover rounded-lg border border-emerald-500 mx-auto" />
+                          ) : (
+                            <div className="h-16 rounded-lg bg-slate-800 border border-slate-700 grid place-items-center text-slate-500">Sin captura</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -569,6 +745,152 @@ export default function Administrador({ currentUser }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB: ENROLAMIENTO BIOMÉTRICO Y HUELLA FIDO2 EN MÓDULO / ESTADIO */}
+      {activeTab === 'enrolamiento' && (
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+          <div>
+            <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <Fingerprint className="w-5 h-5 text-purple-600" />
+              Módulo de Enrolamiento Biométrico y Registro de Huella Digital
+            </h3>
+            <p className="text-xs text-slate-500">
+              Permite buscar a un hincha por su RUT, verificar visualmente su cédula de identidad y encender el sensor biométrico físico del dispositivo (FIDO2/WebAuthn) para enrolar su huella digital.
+            </p>
+          </div>
+
+          {/* Buscador de Hincha */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={buscarRutHincha}
+              onChange={(e) => setBuscarRutHincha(e.target.value)}
+              placeholder="Ingresa el RUT del hincha (ej: 18.543.210-K)"
+              className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => handleBuscarHincha()}
+              className="px-6 py-3 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-xl text-sm flex items-center justify-center gap-2 transition"
+            >
+              Buscar Hincha
+            </button>
+          </div>
+
+          {/* Ficha Completa del Hincha */}
+          {hinchaEncontrado ? (
+            <div className="space-y-6 pt-4 border-t border-slate-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div>
+                  <span className="text-xs text-slate-500 block">Nombre del Hincha:</span>
+                  <span className="text-base font-extrabold text-slate-900">
+                    {hinchaEncontrado.hincha?.nombres} {hinchaEncontrado.hincha?.apellidos}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 block">RUT / Documento:</span>
+                  <span className="text-base font-extrabold font-mono text-purple-800">
+                    {hinchaEncontrado.rutEnmascarado} ({hinchaEncontrado.rutNormalizado})
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 block">Estado de Huellas:</span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mt-1 bg-purple-100 text-purple-800">
+                    <Fingerprint className="w-3.5 h-3.5" />
+                    {hinchaEncontrado.huellas?.length || 0} huella(s) enrolada(s)
+                  </span>
+                </div>
+              </div>
+
+              {/* Fotografías Registradas: DNI vs Selfie */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-blue-600" />
+                      Foto de la Cédula de Identidad (DNI)
+                    </h4>
+                    <span className="text-[11px] font-bold text-slate-400">Anverso</span>
+                  </div>
+                  {hinchaEncontrado.fotoDocumentoBase64 ? (
+                    <img
+                      src={hinchaEncontrado.fotoDocumentoBase64}
+                      alt="Cédula registrada"
+                      className="w-full aspect-[16/10] object-contain rounded-xl border border-slate-200 bg-slate-900"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[16/10] rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 grid place-items-center text-xs text-slate-400">
+                      No se ha registrado foto física de la cédula aún
+                    </div>
+                  )}
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                      <ScanFace className="w-4 h-4 text-emerald-600" />
+                      Selfie Facial Enrolada (Vector Biométrico)
+                    </h4>
+                    <span className="text-[11px] font-bold text-emerald-600">Liveness OK</span>
+                  </div>
+                  {hinchaEncontrado.fotoRostroBase64 ? (
+                    <img
+                      src={hinchaEncontrado.fotoRostroBase64}
+                      alt="Selfie registrada"
+                      className="w-full aspect-[16/10] object-contain rounded-xl border border-slate-200 bg-slate-900 -scale-x-100"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[16/10] rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 grid place-items-center text-xs text-slate-400">
+                      Sin foto selfie registrada
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botón Acción: Encender Biométrico del Dispositivo */}
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6 text-center space-y-4">
+                <div className="max-w-md mx-auto space-y-1">
+                  <h4 className="font-extrabold text-base text-purple-950">
+                    Captura Criptográfica de Huella Digital (FIDO2)
+                  </h4>
+                  <p className="text-xs text-purple-800 leading-relaxed">
+                    Al hacer clic en el botón de abajo, el navegador solicitará autorización al sistema operativo y <strong>encenderá el lector biométrico físico de tu teléfono, laptop o terminal USB</strong>.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={enrolandoHuella}
+                  onClick={handleEnrolarHuellaDispositivo}
+                  className="px-8 py-4 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-extrabold text-base rounded-2xl shadow-lg flex items-center justify-center gap-3 mx-auto transition"
+                >
+                  <Fingerprint className={`w-6 h-6 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                  {enrolandoHuella ? 'Sensor Encendido: Apoya tu dedo en el lector…' : 'Encender Sensor Biométrico y Enrolar Huella'}
+                </button>
+
+                {hinchaEncontrado.huellas?.length > 0 && (
+                  <div className="pt-4 border-t border-purple-200/60 max-w-lg mx-auto text-left">
+                    <span className="text-xs font-bold text-purple-900 block mb-2">Credenciales Biométricas Activas:</span>
+                    <div className="space-y-1.5 text-xs font-mono">
+                      {hinchaEncontrado.huellas.map((h) => (
+                        <div key={h.id} className="bg-white px-3 py-2 rounded-lg border border-purple-200 flex justify-between items-center">
+                          <span className="text-slate-800 truncate max-w-[280px]">{h.credentialId}</span>
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-sans font-bold">ACTIVO</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 space-y-2">
+              <Fingerprint className="w-12 h-12 mx-auto text-slate-300" />
+              <p className="text-sm font-semibold">Ingresa un RUT arriba para consultar la cédula y enrolar la huella.</p>
+            </div>
+          )}
         </div>
       )}
 

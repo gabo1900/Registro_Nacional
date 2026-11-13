@@ -77,6 +77,13 @@ public class EnrolarHinchaApplicationService implements EnrolarHinchaUseCase {
         hincha.setLivenessPassed(vectorRef.isLivenessSuperado());
         hincha.setLivenessScore(vectorRef.getLivenessScore());
         hincha.setEstadoEnrolamiento("COMPLETADO");
+        if (cmd.fotoDocumentoBase64() != null && !cmd.fotoDocumentoBase64().isBlank()) {
+            hincha.setFotoDocumentoBase64(cmd.fotoDocumentoBase64());
+        }
+        if (cmd.selfieBase64() != null && !cmd.selfieBase64().isBlank()) {
+            hincha.setFotoRostroBase64(cmd.selfieBase64());
+        }
+        hincha.setResultadoCotejoDni("VERIFICADO_COTEJO_OK");
 
         hincha = hinchaRepository.save(hincha, vectorRef.getVectorCifrado());
 

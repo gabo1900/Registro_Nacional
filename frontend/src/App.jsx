@@ -128,6 +128,13 @@ export default function App() {
     setActiveScreen('landing');
   };
 
+  // Con sesión iniciada, la portada pública / login / registro no se muestran: siempre se queda en su panel.
+  useEffect(() => {
+    if (currentUser && ['landing', 'login', 'register'].includes(activeScreen)) {
+      setActiveScreen('panel');
+    }
+  }, [currentUser, activeScreen]);
+
   const irRegistro = () => {
     setAuthError('');
     setActiveScreen('register');

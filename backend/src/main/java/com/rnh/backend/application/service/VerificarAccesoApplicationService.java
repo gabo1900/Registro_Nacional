@@ -68,11 +68,36 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
             }
         }
 
-        // 2. Si se proporcionó RUT/Documento
+        // 2. Si se proporcionó RUT/Documento (Verificación 1:1 ultrarrápida)
         if (hincha == null && documentoRut != null && !documentoRut.isBlank()) {
             rutVo = new RutDocumento(documentoRut, "CEDULA_CHILE");
             docHash = cryptoService.hmacSha256(rutVo.getValorNormalizado());
             hincha = hinchaRepository.findByDocumentoHash(docHash).orElse(null);
+        }
+
+        // 3. Si NO se dio RUT, intentar Identificación 1:N por Rostro o por Huella en el Recinto
+        if (hincha == null && (documentoRut == null || documentoRut.isBlank())) {
+            List<Hincha> candidatos = hinchaRepository.findByTenantId(tenantId);
+            Hincha mejorCandidato = null;
+            double mejorScore = 0.0;
+            for (Hincha c : candidatos) {
+                String vectorDesencriptado = hinchaRepository.findVectorCifradoByHinchaId(c.getId()).orElse(null);
+                double s = biometricProvider.verificarIdentidadEnPuerta(
+                        c.getBiometricTokenRef(),
+                        vectorDesencriptado,
+                        capturaEnVivoBase64,
+                        descriptorCapturaJson
+                );
+                if (s > mejorScore && s >= similarityThreshold) {
+                    mejorScore = s;
+                    mejorCandidato = c;
+                }
+            }
+            if (mejorCandidato != null) {
+                hincha = mejorCandidato;
+                docHash = hincha.getDocumentoHash();
+                rutVo = new RutDocumento(hincha.getDocumentoDecrypted(), hincha.getTipoDocumento());
+            }
         }
 
         if (docHash != null) {
@@ -94,7 +119,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                         rutVo != null ? rutVo.getValorEnmascarado() : p.getDocumentoMasked(),
                         hincha != null ? hincha.getBiometricTokenRef() : "BLOQUEADO",
                         p.getCodigoCausal(),
-                        puerta
+                        puerta,
+                        hincha != null ? hincha.getFotoDocumentoBase64() : null,
+                        hincha != null ? hincha.getFotoRostroBase64() : null
                 );
             }
         }
@@ -112,7 +139,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                     rutVo != null ? rutVo.getValorEnmascarado() : "N/A",
                     null,
                     null,
-                    puerta
+                    puerta,
+                    null,
+                    null
             );
         }
 
@@ -147,7 +176,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                     docMasked,
                     hincha.getBiometricTokenRef(),
                     null,
-                    puerta
+                    puerta,
+                    hincha.getFotoDocumentoBase64(),
+                    hincha.getFotoRostroBase64()
             );
         }
 
@@ -164,7 +195,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                 docMasked,
                 hincha.getBiometricTokenRef(),
                 null,
-                puerta
+                puerta,
+                hincha.getFotoDocumentoBase64(),
+                hincha.getFotoRostroBase64()
         );
     }
 
@@ -189,7 +222,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                     rutVo.getValorEnmascarado(),
                     null,
                     p.getCodigoCausal(),
-                    "Ticketera Online"
+                    "Ticketera Online",
+                    null,
+                    null
             );
         }
 
@@ -205,7 +240,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                     rutVo.getValorEnmascarado(),
                     null,
                     null,
-                    "Ticketera Online"
+                    "Ticketera Online",
+                    null,
+                    null
             );
         }
 
@@ -223,7 +260,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
                 rutVo.getValorEnmascarado(),
                 h.getBiometricTokenRef(),
                 null,
-                "Ticketera Online"
+                "Ticketera Online",
+                h.getFotoDocumentoBase64(),
+                h.getFotoRostroBase64()
         );
     }
 

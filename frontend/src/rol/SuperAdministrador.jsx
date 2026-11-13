@@ -11,6 +11,8 @@ import {
   Layers,
   ShieldAlert,
   Activity,
+  Fingerprint,
+  IdCard,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
 
@@ -66,6 +68,11 @@ export default function SuperAdministrador() {
     rut: '',
     telefono: '',
   });
+
+  // Estado Enrolamiento Biométrico y Búsqueda
+  const [buscarRutHincha, setBuscarRutHincha] = useState('');
+  const [hinchaEncontrado, setHinchaEncontrado] = useState(null);
+  const [enrolandoHuella, setEnrolandoHuella] = useState(false);
 
   const cargarDashboard = async (tenantFilter = filtroTenantId) => {
     setLoading(true);
@@ -236,6 +243,84 @@ export default function SuperAdministrador() {
     }
   };
 
+  const handleBuscarHincha = async (rutABuscar) => {
+    const rut = rutABuscar || buscarRutHincha;
+    if (!rut) return;
+    setErrorMsg('');
+    try {
+      const resp = await apiFetch(`/api/tenant/hinchas/buscar?rut=${encodeURIComponent(rut.trim())}`);
+      setHinchaEncontrado(resp);
+    } catch (err) {
+      setErrorMsg(err.message || 'No se encontró hincha con ese RUT.');
+      setHinchaEncontrado(null);
+    }
+  };
+
+  const handleEnrolarHuella = async () => {
+    if (!hinchaEncontrado?.hincha) {
+      return setErrorMsg('Primero busca un hincha por RUT para enrolarle la huella.');
+    }
+    setErrorMsg('');
+    setEnrolandoHuella(true);
+    try {
+      if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+        throw new Error('Este dispositivo no cuenta con sensor biométrico nativo compatible.');
+      }
+
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const userId = crypto.getRandomValues(new Uint8Array(16));
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: 'Registro Nacional de Hinchas ANFP', id: window.location.hostname },
+          user: {
+            id: userId,
+            name: hinchaEncontrado.rutNormalizado,
+            displayName: `${hinchaEncontrado.hincha.nombres} ${hinchaEncontrado.hincha.apellidos || ''}`.trim(),
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: 'public-key' },
+            { alg: -257, type: 'public-key' },
+          ],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+          timeout: 60000,
+        },
+      });
+
+      if (!cred) throw new Error('Lectura biométrica cancelada.');
+
+      const aBase64 = (buf) =>
+        btoa(String.fromCharCode(...new Uint8Array(buf)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+
+      const credId = cred.id || aBase64(cred.rawId);
+      const pubKey = cred.response?.attestationObject
+        ? aBase64(cred.response.attestationObject)
+        : `FIDO2_PUBKEY_${Date.now()}`;
+
+      await apiFetch('/api/tenant/hinchas/enrolar-huella', {
+        method: 'POST',
+        body: JSON.stringify({
+          rut: hinchaEncontrado.rutNormalizado,
+          hinchaId: hinchaEncontrado.hincha.id,
+          credentialId: `FIDO2-${credId.substring(0, 30)}`,
+          publicKey: pubKey,
+          dispositivoTipo: 'Sensor Biométrico FIDO2 / SuperAdmin Master',
+          dedoIndice: 'INDICE_DERECHO',
+        }),
+      });
+
+      setSuccessMsg(`¡Huella biométrica enrolada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
+      handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+    } catch (err) {
+      setErrorMsg(err.message || 'Error al capturar la huella biométrica.');
+    } finally {
+      setEnrolandoHuella(false);
+    }
+  };
+
   const getTenantFiltroNombre = () => {
     if (filtroTenantId === 'TODOS') return 'TODOS';
     const found = dashboard.tenants.find((t) => t.id === filtroTenantId);
@@ -342,6 +427,116 @@ export default function SuperAdministrador() {
           </div>
           <div className="text-xs text-slate-400 mt-1">Actual</div>
         </div>
+      </div>
+
+      {/* SECCIÓN BIOMÉTRICA CENTRAL: BÚSQUEDA POR RUT, VERIFICACIÓN DE CÉDULA Y ENROLAMIENTO DE HUELLA */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <Fingerprint className="w-5 h-5 text-purple-600" />
+              Módulo de Enrolamiento y Cotejo de Cédula (DNI) / Huella Digital
+            </h2>
+            <p className="text-xs text-slate-500">
+              Consulta la ficha biométrica de cualquier hincha, revisa su cédula de identidad y enciende el sensor biométrico del dispositivo para enrolar su huella.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={buscarRutHincha}
+              onChange={(e) => setBuscarRutHincha(e.target.value)}
+              placeholder="RUT del hincha (ej: 18.543.210-K)"
+              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-mono w-48 sm:w-56"
+            />
+            <button
+              onClick={() => handleBuscarHincha()}
+              className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow transition"
+            >
+              Consultar
+            </button>
+          </div>
+        </div>
+
+        {hinchaEncontrado ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-500 block">Nombre del Hincha:</span>
+                <span className="font-extrabold text-slate-900 text-sm">
+                  {hinchaEncontrado.hincha?.nombres} {hinchaEncontrado.hincha?.apellidos}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">RUT / Documento:</span>
+                <span className="font-extrabold font-mono text-purple-800 text-sm">
+                  {hinchaEncontrado.rutEnmascarado} ({hinchaEncontrado.rutNormalizado})
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Huellas Enroladas:</span>
+                <span className="inline-flex items-center gap-1 font-bold text-purple-700">
+                  <Fingerprint className="w-3.5 h-3.5" />
+                  {hinchaEncontrado.huellas?.length || 0} credencial(es) activa(s)
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+                <span className="text-xs font-bold text-slate-700 block flex items-center gap-1.5">
+                  <IdCard className="w-4 h-4 text-blue-600" />
+                  Foto Cédula de Identidad (DNI):
+                </span>
+                {hinchaEncontrado.fotoDocumentoBase64 ? (
+                  <img
+                    src={hinchaEncontrado.fotoDocumentoBase64}
+                    alt="Cédula"
+                    className="w-full h-36 object-contain rounded-lg border border-slate-200 bg-slate-900"
+                  />
+                ) : (
+                  <div className="w-full h-36 rounded-lg bg-slate-100 border border-dashed border-slate-300 grid place-items-center text-xs text-slate-400">
+                    Sin foto física de cédula registrada
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+                <span className="text-xs font-bold text-slate-700 block flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                  Selfie Facial Registrada:
+                </span>
+                {hinchaEncontrado.fotoRostroBase64 ? (
+                  <img
+                    src={hinchaEncontrado.fotoRostroBase64}
+                    alt="Rostro"
+                    className="w-full h-36 object-contain rounded-lg border border-slate-200 bg-slate-900 -scale-x-100"
+                  />
+                ) : (
+                  <div className="w-full h-36 rounded-lg bg-slate-100 border border-dashed border-slate-300 grid place-items-center text-xs text-slate-400">
+                    Sin selfie registrada
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-3 items-center justify-between bg-purple-50 p-4 rounded-xl border border-purple-200">
+              <div className="text-xs text-purple-900">
+                <span className="font-bold block">Enrolar Huella con Sensor Biométrico del Dispositivo:</span>
+                Enciende el sensor TouchID / lector de huella físico de este computador o teléfono.
+              </div>
+              <button
+                type="button"
+                disabled={enrolandoHuella}
+                onClick={handleEnrolarHuella}
+                className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-bold text-xs rounded-xl shadow flex items-center gap-2 shrink-0 transition"
+              >
+                <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                {enrolandoHuella ? 'Sensor Encendido…' : 'Encender Sensor y Enrolar Huella'}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* TENANTS TABLE SECTION (Matching Screenshot) */}
@@ -551,7 +746,7 @@ export default function SuperAdministrador() {
                       >
                         <Edit3 className="w-3.5 h-3.5" /> Editar
                       </button>
-                      {u.email !== 'yanezgabriel787@gmail.com' && (
+                      {u.rol !== 'SUPER_ADMIN' && (
                         <button
                           onClick={() => handleDeleteUser(u)}
                           className="px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50/50 hover:bg-red-100 text-xs font-semibold text-red-600 flex items-center gap-1"

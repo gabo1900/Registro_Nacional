@@ -3,6 +3,7 @@ import { Sun, Glasses, Smartphone, Fingerprint, Check, CircleCheck, ShieldCheck,
 import { apiFetch } from '../services/api';
 import { PasoShell, BotonPrincipal, BotonSecundario, Aviso, FilaResumen, useBotonAtras } from './ui';
 import CampoDocumento, { documentoEsValido, errorDocumento } from './CampoDocumento';
+import CapturaDocumento from './CapturaDocumento';
 import CapturaFacial from './CapturaFacial';
 import CampoFecha from './CampoFecha';
 import { rutEsValido, enmascararDocumento, enmascararCelular, enmascararCorreo, edadDesde } from './formato';
@@ -63,6 +64,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
     () =>
       [
         necesitaDocumento && 'documento',
+        'fotoDocumento',
         'nacimiento',
         'terminos',
         'antesFoto',
@@ -79,6 +81,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
     aceptaTerminosGenerales: false,
     aceptaTratamientoBiometrico: false,
   });
+  const [fotoDocumento, setFotoDocumento] = useState(null);
   const [foto, setFoto] = useState(null);
   const [huella, setHuella] = useState(null);
   const [errores, setErrores] = useState({});
@@ -129,7 +132,9 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
             nombres: nombres || '',
             apellidos: resto.join(' '),
             nacionalidad: datos.tipoDocumento === 'CEDULA_CHILE' ? 'Chilena' : 'Extranjera',
-            ...foto,
+            fotoDocumentoBase64: fotoDocumento,
+            selfieBase64: foto?.selfieBase64,
+            descriptorFacialJson: foto?.descriptorFacialJson,
           }),
         }),
         // Evita un parpadeo si el servidor responde al instante.
@@ -168,6 +173,35 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
           onValor={(v) => actualizar('numeroDocumento', v)}
           error={errores.numeroDocumento}
         />
+      </PasoShell>
+    );
+  }
+
+  if (paso === 'fotoDocumento') {
+    return (
+      <PasoShell
+        {...comun}
+        titulo="Foto de tu Cédula de Identidad"
+        descripcion="Necesitamos verificar que la cédula sea auténtica y coincida con tu rostro."
+        onSubmit={() => {
+          if (!fotoDocumento) return setErrores({ fotoDocumento: 'Debes capturar o subir la foto de tu cédula para continuar.' });
+          siguiente();
+        }}
+        accion={<BotonPrincipal deshabilitado={!fotoDocumento}>Continuar</BotonPrincipal>}
+      >
+        <CapturaDocumento
+          tipoDocumento={datos.tipoDocumento}
+          onCapturada={(b64) => {
+            setFotoDocumento(b64);
+            siguiente();
+          }}
+          onCancelar={atras}
+        />
+        {errores.fotoDocumento && (
+          <div className="mt-4">
+            <Aviso>{errores.fotoDocumento}</Aviso>
+          </div>
+        )}
       </PasoShell>
     );
   }
@@ -402,13 +436,36 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
           <FilaResumen etiqueta="Fecha de nacimiento" valor={formatearFecha(datos.fechaNacimiento)} onEditar={() => ir('nacimiento')} />
           {usuario?.telefonoDecrypted && <FilaResumen etiqueta="Celular" valor={enmascararCelular(usuario.telefonoDecrypted)} />}
           {usuario?.email && <FilaResumen etiqueta="Correo" valor={enmascararCorreo(usuario.email)} />}
+          {/* 1. Foto de la Cédula */}
+          <div className="flex items-center justify-between gap-3 py-3.5">
+            <div className="flex items-center gap-3">
+              {fotoDocumento ? (
+                <img src={fotoDocumento} alt="Cédula" className="h-12 w-16 rounded-md object-cover border border-linea" />
+              ) : null}
+              <div>
+                <div className="text-sm text-tinta-tenue">Cédula de Identidad</div>
+                <div className={`text-base font-bold ${fotoDocumento ? 'text-tinta' : 'text-error-700'}`}>
+                  {fotoDocumento ? 'Cédula adjuntada' : 'Falta'}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => ir('fotoDocumento')}
+              className="h-11 shrink-0 rounded-xl px-3 text-[0.9375rem] font-bold text-marca-700 active:bg-marca-50"
+            >
+              {fotoDocumento ? 'Cambiar' : 'Tomar'}
+            </button>
+          </div>
+
+          {/* 2. Foto de la Cara */}
           <div className="flex items-center justify-between gap-3 py-3.5">
             <div className="flex items-center gap-3">
               {foto?.selfieBase64?.startsWith('data:image/') ? (
                 <img src={foto.selfieBase64} alt="" className="h-14 w-11 rounded-[50%] object-cover -scale-x-100" />
               ) : null}
               <div>
-                <div className="text-sm text-tinta-tenue">Foto de tu cara</div>
+                <div className="text-sm text-tinta-tenue">Foto de tu cara (Selfie)</div>
                 <div className={`text-base font-bold ${foto ? 'text-tinta' : 'text-error-700'}`}>{foto ? 'Lista' : 'Falta'}</div>
               </div>
             </div>
@@ -420,6 +477,14 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
               {foto ? 'Cambiar' : 'Tomar'}
             </button>
           </div>
+
+          {/* 3. Indicador de Cotejo */}
+          {fotoDocumento && foto && (
+            <div className="flex items-center gap-2 py-3 px-3.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-800">
+              <ShieldCheck className="size-4 text-emerald-600 shrink-0" />
+              Cotejo de identidad: Documento y Rostro listos para validación ANFP
+            </div>
+          )}
           {pasos.includes('huella') && (
             <FilaResumen etiqueta="Huella" valor={huella ? 'Agregada' : 'No agregada (opcional)'} onEditar={() => ir('huella')} />
           )}

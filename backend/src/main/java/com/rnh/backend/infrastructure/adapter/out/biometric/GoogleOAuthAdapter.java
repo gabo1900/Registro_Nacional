@@ -2,6 +2,7 @@ package com.rnh.backend.infrastructure.adapter.out.biometric;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rnh.backend.domain.port.out.GoogleAuthPort;
+import io.quarkus.runtime.LaunchMode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -40,16 +41,6 @@ public class GoogleOAuthAdapter implements GoogleAuthPort {
     public Optional<GoogleUserInfo> verificarTokenConGoogle(String credentialToken, String tokenType) {
         if (credentialToken == null || credentialToken.isBlank()) {
             return Optional.empty();
-        }
-        // Soporte para pruebas de desarrollo local en red WiFi sin túnel SSL:
-        if (credentialToken.startsWith("DEV_SIMULATED_")) {
-            return Optional.of(new GoogleUserInfo(
-                    "google-sub-dev-yanez-12345",
-                    "yanezgabriel787@gmail.com",
-                    true,
-                    "Gabriel Yáñez (Google Auth)",
-                    "https://lh3.googleusercontent.com/a/default-user"
-            ));
         }
         try {
             HttpRequest request;

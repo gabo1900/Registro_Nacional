@@ -39,6 +39,9 @@ public class DataInitializer {
     @Inject
     CryptoService cryptoService;
 
+    @Inject
+    SuperAdminPolicy superAdminPolicy;
+
     @Transactional
     public void onStart(@Observes StartupEvent ev) {
         // 1. Asegurar Tenants base
@@ -87,9 +90,10 @@ public class DataInitializer {
                 10
         );
 
-        // 2. Asegurar Super Administrador Global: yanezgabriel787@gmail.com y yanezgabriel3416@gmail.com / clave 1234
-        crearSuperAdminSiNoExiste(anfp, "yanezgabriel787@gmail.com");
-        crearSuperAdminSiNoExiste(anfp, "yanezgabriel3416@gmail.com");
+        // 2. Asegurar Super Administradores Globales: SOLO los correos exactos de rnh.security.super-admin-emails (clave inicial 1234)
+        for (String email : superAdminPolicy.correos()) {
+            crearSuperAdminSiNoExiste(anfp, email);
+        }
 
         // 3. Asegurar Administrador de Tenant (Estadio Municipal)
         if (usuarioRepository.findByEmail("admin@estadiomunicipal.cl").isEmpty()) {
@@ -118,83 +122,6 @@ public class DataInitializer {
             operador.setRol("OPERADOR_ACCESO");
             operador.setEstado("ACTIVE");
             usuarioRepository.save(operador);
-        }
-
-        // 5. Asegurar Usuario / Hincha enrolado de prueba
-        if (usuarioRepository.findByEmail("hincha@estadiomunicipal.cl").isEmpty()) {
-            String rutHincha = "18543210K";
-            String rutHash = cryptoService.hmacSha256(rutHincha);
-
-            Usuario userHincha = new Usuario();
-            userHincha.setUuid(UUID.randomUUID().toString());
-            userHincha.setTenantId(estadioMunicipal.getId());
-            userHincha.setNombreCompleto("Matías Fernández Hincha");
-            userHincha.setEmail("hincha@estadiomunicipal.cl");
-            userHincha.setPasswordHash(cryptoService.hashPassword("1234"));
-            userHincha.setRol("USUARIO");
-            userHincha.setEstado("ACTIVE");
-            userHincha.setRutDecrypted(rutHincha);
-            userHincha.setRutHash(rutHash);
-            userHincha.setTelefonoDecrypted("+56911223344");
-            userHincha = usuarioRepository.save(userHincha);
-
-            Hincha hincha = new Hincha();
-            hincha.setUsuarioId(userHincha.getId());
-            hincha.setTenantId(estadioMunicipal.getId());
-            hincha.setTipoDocumento("CEDULA_CHILE");
-            hincha.setDocumentoHash(rutHash);
-            hincha.setDocumentoDecrypted(rutHincha);
-            hincha.setNombres("Matías");
-            hincha.setApellidos("Fernández");
-            hincha.setFechaNacimiento(LocalDate.of(1996, 5, 14));
-            hincha.setNacionalidad("Chilena");
-            hincha.setBiometricTokenRef("RNH-BIO-MATIAS14");
-            hincha.setLivenessPassed(true);
-            hincha.setLivenessScore(0.991);
-            hincha.setHuellaRegistrada(true);
-            hincha.setEstadoEnrolamiento("COMPLETADO");
-            hincha = hinchaRepository.save(hincha, "[0.124,0.531,-0.219,0.882,0.441,-0.112,0.674,0.391]");
-
-            Consentimiento c = new Consentimiento();
-            c.setHinchaId(hincha.getId());
-            c.setUsuarioId(userHincha.getId());
-            c.setTenantId(estadioMunicipal.getId());
-            c.setAceptaTerminosGenerales(true);
-            c.setAceptaTratamientoBiometrico(true);
-            c.setAceptaTransferenciaProcesamiento(true);
-            c.setVersionTerminos("ANFP-RNH-2026-v1.0");
-            c.setIpOrigen("127.0.0.1");
-            c.setHashDocumentoLegal(cryptoService.hmacSha256("TERMINOS_ANFP_RNH_2026:" + rutHash));
-            hinchaRepository.saveConsentimiento(c);
-
-            HuellaBiometrica h = new HuellaBiometrica();
-            h.setHinchaId(hincha.getId());
-            h.setUsuarioId(userHincha.getId());
-            h.setTenantId(estadioMunicipal.getId());
-            h.setCredentialId("FIDO2-CRED-ESTADIO-18543210K");
-            h.setPublicKeyEncrypted("COSE_PUBKEY_ED25519_18543210K");
-            h.setHuellaHash(cryptoService.hmacSha256("FIDO2-CRED-ESTADIO-18543210K"));
-            h.setDispositivoTipo("TouchID / Sensor Biométrico FIDO2");
-            h.setDedoIndice("INDICE_DERECHO");
-            h.setSignCount(1L);
-            h.setActivo(true);
-            hinchaRepository.saveHuella(h);
-        }
-
-        // 6. Asegurar ejemplo de Prohibición de Ingreso (Derecho de Admisión Código 101 - Ley N° 19.327)
-        String rutSancionado = RutDocumento.normalizar("20.111.222-3");
-        String hashSancionado = cryptoService.hmacSha256(rutSancionado);
-        if (prohibicionRepository.findActivasByDocumentoHash(hashSancionado, monumental.getId()).isEmpty()) {
-            ProhibicionIngreso p = new ProhibicionIngreso();
-            p.setTenantId(monumental.getId());
-            p.setDocumentoHash(hashSancionado);
-            p.setDocumentoMasked("201.***-3");
-            p.setNombreReferencia("Individuo Sancionado (Código 101)");
-            p.setCodigoCausal("LEY_19327_ART_10_DERECHO_ADMISION");
-            p.setMotivo("Prohibición nacional de ingreso a estadios por infracción grave a la Ley N° 19.327 (Estadio Seguro).");
-            p.setAlcance("NACIONAL");
-            p.setActiva(true);
-            prohibicionRepository.save(p);
         }
     }
 

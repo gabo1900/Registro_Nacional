@@ -8,6 +8,7 @@ import com.rnh.backend.domain.port.out.TenantRepositoryPort;
 import com.rnh.backend.domain.port.out.UsuarioRepositoryPort;
 import com.rnh.backend.domain.vo.RutDocumento;
 import com.rnh.backend.infrastructure.security.CryptoService;
+import com.rnh.backend.infrastructure.security.SuperAdminPolicy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -26,6 +27,9 @@ public class TenantManagementApplicationService implements TenantManagementUseCa
 
     @Inject
     CryptoService cryptoService;
+
+    @Inject
+    SuperAdminPolicy superAdminPolicy;
 
     @Override
     public List<Tenant> listarTenants() {
@@ -199,8 +203,8 @@ public class TenantManagementApplicationService implements TenantManagementUseCa
         Usuario existente = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
 
-        if ("yanezgabriel787@gmail.com".equalsIgnoreCase(existente.getEmail())) {
-            throw new IllegalArgumentException("No se puede eliminar la cuenta principal del Super Administrador.");
+        if (superAdminPolicy.esSuperAdmin(existente.getEmail())) {
+            throw new IllegalArgumentException("No se puede eliminar una cuenta principal de Super Administrador.");
         }
 
         if (!isSuperAdmin && !tenantIdContext.equals(existente.getTenantId())) {

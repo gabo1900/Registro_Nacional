@@ -44,6 +44,15 @@ public class TenantAdminResource {
     VerificarAccesoUseCase verificarAccesoUseCase;
 
     @Inject
+    com.rnh.backend.domain.port.in.EnrolarHinchaUseCase enrolarHinchaUseCase;
+
+    @Inject
+    com.rnh.backend.infrastructure.security.CryptoService cryptoService;
+
+    @Inject
+    com.rnh.backend.domain.port.out.UsuarioRepositoryPort usuarioRepository;
+
+    @Inject
     JwtTokenService jwtTokenService;
 
     public record TenantUserRequest(
@@ -71,6 +80,25 @@ public class TenantAdminResource {
             String codigoCausal,
             String motivo,
             String alcance
+    ) {}
+
+    public record EnrolarHuellaAdminRequest(
+            String rut,
+            Long hinchaId,
+            String credentialId,
+            String publicKey,
+            String dispositivoTipo,
+            String dedoIndice
+    ) {}
+
+    public record EnrolarBiometriaAdminRequest(
+            String rut,
+            String nombres,
+            String apellidos,
+            String fechaNacimiento,
+            String fotoDocumentoBase64,
+            String selfieBase64,
+            String descriptorFacialJson
     ) {}
 
     private JwtTokenService.JwtClaims requireTenantAdminOrOperator(String authHeader) {
@@ -224,5 +252,120 @@ public class TenantAdminResource {
         String tenantId = resolveTenantId(claims);
         boolean ok = verificarAccesoUseCase.levantarProhibicion(id, tenantId, claims.isSuperAdmin());
         return Map.of("levantada", ok, "id", id);
+    }
+
+    @GET
+    @Path("/hinchas/buscar")
+    public Map<String, Object> buscarHinchaPorRut(
+            @HeaderParam("Authorization") String authHeader,
+            @jakarta.ws.rs.QueryParam("rut") String rut
+    ) {
+        requireTenantAdminOrOperator(authHeader);
+        if (rut == null || rut.isBlank()) {
+            throw new IllegalArgumentException("Debe ingresar un RUT para buscar.");
+        }
+        String rutNorm = com.rnh.backend.domain.vo.RutDocumento.normalizar(rut);
+        String rutHash = cryptoService.hmacSha256(rutNorm);
+
+        Hincha hincha = hinchaRepository.findByDocumentoHash(rutHash)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró ningún hincha con el RUT: " + rutNorm));
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("hincha", hincha);
+        resp.put("rutNormalizado", rutNorm);
+        resp.put("rutEnmascarado", new com.rnh.backend.domain.vo.RutDocumento(rutNorm, hincha.getTipoDocumento()).getValorEnmascarado());
+        resp.put("huellas", enrolarHinchaUseCase.listarHuellasUsuario(hincha.getUsuarioId()));
+        resp.put("fotoDocumentoBase64", hincha.getFotoDocumentoBase64());
+        resp.put("fotoRostroBase64", hincha.getFotoRostroBase64());
+        resp.put("resultadoCotejoDni", hincha.getResultadoCotejoDni());
+        return resp;
+    }
+
+    @POST
+    @Path("/hinchas/enrolar-huella")
+    public com.rnh.backend.domain.model.HuellaBiometrica enrolarHuellaAdmin(
+            @HeaderParam("Authorization") String authHeader,
+            EnrolarHuellaAdminRequest req
+    ) {
+        JwtTokenService.JwtClaims claims = requireTenantAdminOrOperator(authHeader);
+        String tenantId = resolveTenantId(claims);
+
+        Hincha hincha = null;
+        if (req.hinchaId() != null) {
+            hincha = hinchaRepository.findById(req.hinchaId()).orElse(null);
+        }
+        if (hincha == null && req.rut() != null && !req.rut().isBlank()) {
+            String rutNorm = com.rnh.backend.domain.vo.RutDocumento.normalizar(req.rut());
+            String hash = cryptoService.hmacSha256(rutNorm);
+            hincha = hinchaRepository.findByDocumentoHash(hash).orElse(null);
+        }
+        if (hincha == null) {
+            throw new IllegalArgumentException("No se encontró al hincha para asociar la huella.");
+        }
+
+        return enrolarHinchaUseCase.registrarHuella(
+                hincha.getUsuarioId(),
+                tenantId,
+                req.credentialId(),
+                req.publicKey(),
+                req.dispositivoTipo() != null ? req.dispositivoTipo() : "Sensor Biométrico FIDO2 / Módulo Estadio",
+                req.dedoIndice() != null ? req.dedoIndice() : "INDICE_DERECHO"
+        );
+    }
+
+    @POST
+    @Path("/hinchas/enrolar-biometria")
+    public Hincha enrolarBiometriaAdmin(
+            @HeaderParam("Authorization") String authHeader,
+            EnrolarBiometriaAdminRequest req
+    ) {
+        JwtTokenService.JwtClaims claims = requireTenantAdminOrOperator(authHeader);
+        String tenantId = resolveTenantId(claims);
+
+        if (req.rut() == null || req.rut().isBlank()) {
+            throw new IllegalArgumentException("El RUT del hincha es obligatorio.");
+        }
+        String rutNorm = com.rnh.backend.domain.vo.RutDocumento.normalizar(req.rut());
+        String hash = cryptoService.hmacSha256(rutNorm);
+
+        Hincha hincha = hinchaRepository.findByDocumentoHash(hash).orElse(null);
+        Long usuarioId;
+        if (hincha != null) {
+            usuarioId = hincha.getUsuarioId();
+        } else {
+            // Si el hincha no existe, crear usuario base en el tenant
+            Usuario u = new Usuario();
+            u.setUuid(java.util.UUID.randomUUID().toString());
+            u.setTenantId(tenantId);
+            u.setNombreCompleto((req.nombres() + " " + (req.apellidos() != null ? req.apellidos() : "")).trim());
+            u.setEmail("hincha." + rutNorm.toLowerCase() + "@rnh.local");
+            u.setPasswordHash(cryptoService.hashPassword(java.util.UUID.randomUUID().toString()));
+            u.setRol("USUARIO");
+            u.setEstado("ACTIVE");
+            u.setRutDecrypted(rutNorm);
+            u.setRutHash(hash);
+            u = usuarioRepository.save(u);
+            usuarioId = u.getId();
+        }
+
+        com.rnh.backend.domain.port.in.EnrolarHinchaUseCase.ActualizarBiometriaCommand cmd =
+                new com.rnh.backend.domain.port.in.EnrolarHinchaUseCase.ActualizarBiometriaCommand(
+                        usuarioId,
+                        tenantId,
+                        "CEDULA_CHILE",
+                        rutNorm,
+                        req.nombres() != null ? req.nombres() : "Hincha",
+                        req.apellidos() != null ? req.apellidos() : "",
+                        req.fechaNacimiento(),
+                        "Chilena",
+                        true,
+                        true,
+                        req.fotoDocumentoBase64(),
+                        req.selfieBase64(),
+                        req.descriptorFacialJson(),
+                        "127.0.0.1"
+                );
+
+        return enrolarHinchaUseCase.enrolarOActualizarBiometria(cmd);
     }
 }

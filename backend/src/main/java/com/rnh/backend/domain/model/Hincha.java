@@ -20,6 +20,9 @@ public class Hincha {
     private boolean huellaRegistrada;
     private String estadoEnrolamiento;
     private boolean tieneProhibicionActiva;
+    private String fotoDocumentoBase64;
+    private String fotoRostroBase64;
+    private String resultadoCotejoDni;
     private LocalDateTime createdAt;
 
     public Hincha() {}
@@ -56,6 +59,12 @@ public class Hincha {
     public void setEstadoEnrolamiento(String estadoEnrolamiento) { this.estadoEnrolamiento = estadoEnrolamiento; }
     public boolean isTieneProhibicionActiva() { return tieneProhibicionActiva; }
     public void setTieneProhibicionActiva(boolean tieneProhibicionActiva) { this.tieneProhibicionActiva = tieneProhibicionActiva; }
+    public String getFotoDocumentoBase64() { return fotoDocumentoBase64; }
+    public void setFotoDocumentoBase64(String fotoDocumentoBase64) { this.fotoDocumentoBase64 = fotoDocumentoBase64; }
+    public String getFotoRostroBase64() { return fotoRostroBase64; }
+    public void setFotoRostroBase64(String fotoRostroBase64) { this.fotoRostroBase64 = fotoRostroBase64; }
+    public String getResultadoCotejoDni() { return resultadoCotejoDni; }
+    public void setResultadoCotejoDni(String resultadoCotejoDni) { this.resultadoCotejoDni = resultadoCotejoDni; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

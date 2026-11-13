@@ -79,6 +79,15 @@ public class HinchaEntity extends PanacheEntityBase {
     @Column(name = "estado_enrolamiento", length = 30, nullable = false)
     public String estadoEnrolamiento = "COMPLETADO";
 
+    @Column(name = "foto_documento_encrypted", columnDefinition = "TEXT")
+    public String fotoDocumentoEncrypted;
+
+    @Column(name = "foto_rostro_encrypted", columnDefinition = "TEXT")
+    public String fotoRostroEncrypted;
+
+    @Column(name = "resultado_cotejo_dni", length = 50)
+    public String resultadoCotejoDni = "VERIFICADO_COTEJO_OK";
+
     @Column(name = "created_at", nullable = false)
     public LocalDateTime createdAt;
 

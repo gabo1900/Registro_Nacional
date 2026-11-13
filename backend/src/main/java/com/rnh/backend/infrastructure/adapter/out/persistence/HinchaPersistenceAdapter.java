@@ -72,6 +72,15 @@ public class HinchaPersistenceAdapter implements HinchaRepositoryPort {
         entity.livenessScore = domain.getLivenessScore();
         entity.huellaRegistrada = domain.isHuellaRegistrada();
         entity.estadoEnrolamiento = domain.getEstadoEnrolamiento() != null ? domain.getEstadoEnrolamiento() : "COMPLETADO";
+        if (domain.getFotoDocumentoBase64() != null) {
+            entity.fotoDocumentoEncrypted = cryptoService.encryptAesGcm(domain.getFotoDocumentoBase64());
+        }
+        if (domain.getFotoRostroBase64() != null) {
+            entity.fotoRostroEncrypted = cryptoService.encryptAesGcm(domain.getFotoRostroBase64());
+        }
+        if (domain.getResultadoCotejoDni() != null) {
+            entity.resultadoCotejoDni = domain.getResultadoCotejoDni();
+        }
         entity.persistAndFlush();
         return toDomain(entity);
     }
@@ -185,6 +194,13 @@ public class HinchaPersistenceAdapter implements HinchaRepositoryPort {
         h.setLivenessScore(e.livenessScore);
         h.setHuellaRegistrada(e.huellaRegistrada);
         h.setEstadoEnrolamiento(e.estadoEnrolamiento);
+        if (e.fotoDocumentoEncrypted != null) {
+            h.setFotoDocumentoBase64(cryptoService.decryptAesGcm(e.fotoDocumentoEncrypted));
+        }
+        if (e.fotoRostroEncrypted != null) {
+            h.setFotoRostroBase64(cryptoService.decryptAesGcm(e.fotoRostroEncrypted));
+        }
+        h.setResultadoCotejoDni(e.resultadoCotejoDni != null ? e.resultadoCotejoDni : "VERIFICADO_COTEJO_OK");
         long prohibicionesCount = ProhibicionIngresoEntity.count("documentoHash = ?1 and activa = true", e.documentoHash);
         h.setTieneProhibicionActiva(prohibicionesCount > 0);
         h.setCreatedAt(e.createdAt);
