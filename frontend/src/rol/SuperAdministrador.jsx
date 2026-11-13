@@ -335,7 +335,7 @@ export default function SuperAdministrador() {
       const cred = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: 'Registro Nacional de Hinchas ANFP', id: window.location.hostname },
+          rp: { name: 'Fanpass', id: window.location.hostname },
           user: {
             id: userId,
             name: `${hinchaEncontrado.rutNormalizado}-${dedoParam}`,
@@ -428,7 +428,7 @@ export default function SuperAdministrador() {
             Panel de Administración Global (SuperAdmin)
           </h1>
           <p className="text-sm text-slate-500">
-            Bienvenido al panel de administración global Multi-Tenant del Registro Nacional de Hinchas.
+            Bienvenido al panel de administración global Multi-Tenant de Fanpass.
           </p>
         </div>
         <div className="flex items-center gap-3">

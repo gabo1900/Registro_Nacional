@@ -14,7 +14,7 @@ import Administrador from './rol/Administrador';
 import Usuario from './rol/Usuario';
 import RegistroCuenta from './registro/RegistroCuenta';
 
-import { ESPECIFICACION_ARQUITECTURA } from './data/terminosAnfp';
+import { ESPECIFICACION_ARQUITECTURA } from './data/terminos';
 import { apiFetch } from './services/api';
 
 const CLASE_INPUT =
@@ -64,7 +64,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    const savedToken = localStorage.getItem('rnh_jwt_token');
+    const savedToken = localStorage.getItem('fanpass_jwt_token');
     if (savedToken) {
       apiFetch('/api/auth/me')
         .then((res) => {
@@ -74,13 +74,13 @@ export default function App() {
           }
         })
         .catch(() => {
-          localStorage.removeItem('rnh_jwt_token');
+          localStorage.removeItem('fanpass_jwt_token');
         });
     }
   }, []);
 
   const iniciarSesion = (res) => {
-    localStorage.setItem('rnh_jwt_token', res.accessToken);
+    localStorage.setItem('fanpass_jwt_token', res.accessToken);
     setCurrentUser(res.usuario);
     setActiveScreen('panel');
   };
@@ -114,7 +114,7 @@ export default function App() {
           tenantCodigo: loginForm.tenantCodigo !== 'TODOS' ? loginForm.tenantCodigo : undefined,
         }),
       });
-      localStorage.setItem('rnh_jwt_token', res.accessToken);
+      localStorage.setItem('fanpass_jwt_token', res.accessToken);
       setCurrentUser(res.usuario);
       setActiveScreen('panel');
     } catch (err) {
@@ -125,7 +125,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('rnh_jwt_token');
+    localStorage.removeItem('fanpass_jwt_token');
     setCurrentUser(null);
     setActiveScreen('landing');
   };

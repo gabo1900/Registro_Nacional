@@ -159,7 +159,7 @@ export default function VerificacionRostroModal({ abierta, onCerrar, onGoRegiste
               </div>
               <h3 className="text-xl font-extrabold text-tinta">Verificando tu registro en vivo</h3>
               <p className="text-sm text-tinta-tenue">
-                Estamos comparando tus rasgos faciales contra el Registro Nacional de Hinchas.
+                Estamos comparando tus rasgos faciales contra los registros de Fanpass.
               </p>
             </div>
           </div>
@@ -205,7 +205,7 @@ export default function VerificacionRostroModal({ abierta, onCerrar, onGoRegiste
                 {resultado.nombreCompleto}
               </h3>
               <p className="mt-1 text-xs text-emerald-100">
-                Tus datos faciales están cargados y activos en el RNH
+                Tus datos faciales están cargados y activos en Fanpass
               </p>
             </div>
 
@@ -298,7 +298,7 @@ export default function VerificacionRostroModal({ abierta, onCerrar, onGoRegiste
               </h3>
               <p className="text-sm text-tinta-suave leading-relaxed">
                 {resultado?.mensaje ||
-                  'No encontramos tus datos faciales en el sistema. Debes registrarte para ser un hincha oficial del fútbol chileno.'}
+                  'No encontramos tus datos faciales en el sistema. Debes registrarte en Fanpass para usar tu acceso.'}
               </p>
             </div>
 

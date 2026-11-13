@@ -12,8 +12,8 @@ export default function Header({ onGoLogin, onGoRegister, onCheckFace }) {
             Regístrate una vez para ir al estadio
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-tinta-suave">
-            El Registro Nacional de Hinchas es obligatorio para comprar entradas del fútbol profesional chileno. Toma
-            unos 3 minutos desde tu celular.
+            Con Fanpass compras tus entradas y entras al estadio con tu rostro. Toma unos 3 minutos desde tu
+            celular.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -35,7 +35,7 @@ export default function Header({ onGoLogin, onGoRegister, onCheckFace }) {
 
           <p className="mt-6 flex items-center gap-2 text-[0.9375rem] text-tinta-tenue">
             <CircleCheck className="size-5 shrink-0 text-ok-700" aria-hidden="true" />
-            Servicio oficial de la ANFP. Gratis.
+            Registro gratis.
           </p>
         </div>
 

@@ -266,7 +266,7 @@ export default function Administrador({ currentUser }) {
       const cred = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: 'Registro Nacional de Hinchas ANFP', id: window.location.hostname },
+          rp: { name: 'Fanpass', id: window.location.hostname },
           user: {
             id: userId,
             name: `${hinchaEncontrado.rutNormalizado}-${dedoParam}`,
@@ -606,7 +606,7 @@ export default function Administrador({ currentUser }) {
           <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
             <div>
               <h3 className="text-base font-extrabold text-slate-900">
-                Terminal de Control de Acceso Biométrico en Puerta (Cláusula 2.2 RNH)
+                Terminal de Control de Acceso Biométrico en Puerta (Cláusula 2.2)
               </h3>
               <p className="text-xs text-slate-500">
                 Verifica identidad por Rostro en Vivo (vector biométrico), Huella Digital FIDO2 o Cédula, y comprueba Prohibiciones de Ingreso en milisegundos.
@@ -869,7 +869,7 @@ export default function Administrador({ currentUser }) {
               )}
 
               <div className="text-[11px] text-slate-400 border-t border-slate-800 pt-3">
-                Conforme a la sección 5.6 de los Términos y Condiciones ANFP, el terminal valida
+                Conforme a la sección 5.6 de los Términos y Condiciones de Fanpass, el terminal valida
                 la probabilidad de acierto sin exponer ni almacenar fotografías en crudo.
               </div>
             </div>
@@ -1187,7 +1187,7 @@ export default function Administrador({ currentUser }) {
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm max-w-2xl space-y-5">
           <div>
             <h3 className="text-base font-extrabold text-slate-900">
-              Consulta de Habilitación RNH para Venta de Entradas (Ticketera)
+              Consulta de Habilitación Fanpass para Venta de Entradas (Ticketera)
             </h3>
             <p className="text-xs text-slate-500">
               Simula la consulta automática que realiza la ticketera al momento de comprar una entrada (Cláusula 2.2 y 4.1).
@@ -1275,13 +1275,13 @@ export default function Administrador({ currentUser }) {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2"
                 >
                   <option value="LEY_19327_ART_10_DERECHO_ADMISION">
-                    Código 101 - Derecho de Admisión ANFP (Ley N° 19.327)
+                    Código 101 - Derecho de Admisión (Ley N° 19.327)
                   </option>
                   <option value="PROHIBICION_JUDICIAL_ESTADIO_SEGURO">
                     Prohibición Judicial Estadio Seguro
                   </option>
                   <option value="INCUMPLIMIENTO_CONDICIONES_RNH">
-                    Violación Condiciones de Uso RNH (Cláusula Sexta)
+                    Violación Condiciones de Uso (Cláusula Sexta)
                   </option>
                 </select>
               </div>

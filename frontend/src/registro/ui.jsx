@@ -37,10 +37,10 @@ export function useBotonAtras(manejador) {
   const ref = useRef(manejador);
   ref.current = manejador;
   useEffect(() => {
-    window.history.pushState({ rnhAsistente: true }, '');
+    window.history.pushState({ fanpassAsistente: true }, '');
     const alVolver = () => {
       const fn = ref.current;
-      window.history.pushState({ rnhAsistente: true }, '');
+      window.history.pushState({ fanpassAsistente: true }, '');
       fn?.();
     };
     window.addEventListener('popstate', alVolver);

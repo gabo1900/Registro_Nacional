@@ -16,6 +16,7 @@ import {
   Inbox,
   Code2,
 } from 'lucide-react';
+import { MARCA } from '../data/marca';
 import { apiFetch } from '../services/api';
 import EnrolamientoHincha from '../registro/EnrolamientoHincha';
 import { enmascararDocumento, enmascararCorreo, enmascararCelular } from '../registro/formato';
@@ -311,7 +312,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
         method: 'POST',
         body: JSON.stringify(arcoForm),
       });
-      setMsg('Recibimos tu solicitud. La revisará el encargado de protección de datos de la ANFP y te responderá por correo.');
+      setMsg('Recibimos tu solicitud. La revisará el encargado de protección de datos de Fanpass y te responderá por correo.');
       setArcoForm({ tipoDerecho: 'ACCESO', fundamento: '' });
       cargarPortal();
     } catch (e) {
@@ -370,14 +371,14 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
         tono: 'error',
         icono: CircleAlert,
         titulo: 'No puedes ingresar a estadios',
-        texto: 'Tienes una prohibición de ingreso vigente. Si crees que es un error, escribe a marketing@anfpchile.cl.',
+        texto: `Tienes una prohibición de ingreso vigente. Si crees que es un error, escribe a ${MARCA.correoAyuda}.`,
       }
     : !hincha.livenessPassed
       ? {
           tono: 'aviso',
           icono: TriangleAlert,
           titulo: 'Falta verificar la foto de tu cara',
-          texto: 'Actualiza en unos minutos. Si no cambia, escribe a marketing@anfpchile.cl.',
+          texto: `Actualiza en unos minutos. Si no cambia, escribe a ${MARCA.correoAyuda}.`,
         }
       : {
           tono: 'ok',
@@ -396,7 +397,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
   const resumen = [
     {
       etiqueta: 'Estadio principal',
-      valor: usuario?.tenantNombre || 'ANFP',
+      valor: usuario?.tenantNombre || 'Fanpass',
       icono: MapPin,
     },
     {
@@ -543,7 +544,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
         </div>
       ) : (
         <EstadoVacio icono={FileCheck2} titulo="No encontramos tu consentimiento">
-          Actualiza la página. Si sigue sin aparecer, escribe a marketing@anfpchile.cl.
+          Actualiza la página. Si sigue sin aparecer, escribe a {MARCA.correoAyuda}.
         </EstadoVacio>
       ),
     },
@@ -558,7 +559,7 @@ export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
             <div>
               <h3 className="text-lg font-bold">Haz una solicitud sobre tus datos</h3>
               <p className="mt-1 text-[0.9375rem] text-tinta-tenue">
-                Es gratis. Lo revisa el encargado de protección de datos de la ANFP (Ley N° 19.628, art. 12).
+                Es gratis. Lo revisa el encargado de protección de datos de Fanpass (Ley N° 19.628, art. 12).
               </p>
             </div>
             <fieldset>

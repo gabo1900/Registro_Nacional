@@ -96,7 +96,7 @@ export default function BiometricCamera({ onCaptureComplete, mode = 'ENROLL' }) 
   const handleSimulatedOrFileCapture = () => {
     const vector = JSON.stringify([0.124, 0.531, -0.219, 0.882, 0.441, -0.112, 0.674, 0.391]);
     const payload = {
-      selfieBase64: 'data:image/jpeg;base64,RNH_LIVE_BIOMETRIC_FRAME_' + Date.now(),
+      selfieBase64: 'data:image/jpeg;base64,FANPASS_LIVE_BIOMETRIC_FRAME_' + Date.now(),
       fotoDocumentoBase64: 'CEDULA_CHILE_OCR_OK_' + Date.now(),
       descriptorFacialJson: vector,
       livenessPassed: true,
@@ -172,7 +172,7 @@ export default function BiometricCamera({ onCaptureComplete, mode = 'ENROLL' }) 
             <ScanFace className="w-12 h-12 text-blue-400 mx-auto opacity-80" />
             <p className="text-xs text-slate-300 max-w-md">
               Active la cámara de su navegador (HTML5 WebRTC) para realizar la captura de documento y
-              prueba de vida activa conforme a la Cláusula 2.1 y 5.3 del RNH.
+              prueba de vida activa conforme a los Términos y Condiciones de Fanpass.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <button

@@ -11,7 +11,7 @@ const PASOS = ['inicio', 'estadio', 'metodo', 'nombre', 'documento', 'celular', 
 const PESO_CUENTA = 0.45;
 
 const ESTADIOS_FALLBACK = [
-  { id: '02da80fb-f3b3-4c93-a90c-ec7dcc3d6462', codigo: 'anfp-central', nombre: 'ANFP Central Chile (Entidad Rectora)', ciudad: 'Santiago' },
+  { id: '02da80fb-f3b3-4c93-a90c-ec7dcc3d6462', codigo: 'anfp-central', nombre: 'Fanpass Central', ciudad: 'Santiago' },
   { id: '2981ed7d-984b-497c-9a37-598904bc92fa', codigo: 'estadio-nacional', nombre: 'Estadio Nacional Julio Martínez', ciudad: 'Santiago' },
   { id: '14efa5c0-4c0a-4452-a67e-b77288bc1237', codigo: 'monumental', nombre: 'Estadio Monumental (Blanco y Negro)', ciudad: 'Santiago' },
   { id: '9691b2ce-d442-4be3-8c62-0eb17abbe2c5', codigo: 'estadio-municipal', nombre: 'Estadio Municipal Ester Roa', ciudad: 'Concepción' },

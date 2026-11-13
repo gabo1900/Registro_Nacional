@@ -38,13 +38,13 @@ export default function FingerprintCapture({ onFingerprintCaptured, dedoDefault 
           publicKey: {
             challenge,
             rp: {
-              name: 'Registro Nacional de Hinchas (RNH Chile)',
+              name: 'Fanpass',
               id: window.location.hostname,
             },
             user: {
               id: userIdBytes,
-              name: 'hincha@rnh.cl',
-              displayName: 'Hincha RNH Chile',
+              name: 'hincha@fanpass.cl',
+              displayName: 'Hincha Fanpass',
             },
             pubKeyCredParams: [
               { alg: -7, type: 'public-key' },   // ES256

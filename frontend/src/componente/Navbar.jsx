@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Menu, X, LogOut, House, FileText, LayoutDashboard, LogIn, ShieldCheck } from 'lucide-react';
 import { Boton, Contenedor, Logo } from './ui';
+import { MARCA } from '../data/marca';
 
 const ROLES = {
   SUPER_ADMIN: 'Super administrador',
@@ -88,14 +89,13 @@ export default function Navbar({ currentUser, activeScreen, setActiveScreen, onO
         <Contenedor className="flex h-9 items-center justify-between gap-4 text-sm">
           <p className="flex items-center gap-2">
             <ShieldCheck className="size-4 shrink-0 text-white/70" aria-hidden="true" />
-            <span className="sm:hidden">Sitio oficial de la ANFP</span>
-            <span className="hidden sm:inline">Sitio oficial de la Asociación Nacional de Fútbol Profesional</span>
+            <span>Tu acceso al estadio, simple y seguro</span>
           </p>
           <a
-            href="mailto:marketing@anfpchile.cl"
+            href={`mailto:${MARCA.correoAyuda}`}
             className="hidden text-white/85 underline decoration-white/30 underline-offset-4 hover:text-white hover:decoration-white md:inline"
           >
-            Ayuda: marketing@anfpchile.cl
+            Ayuda: {MARCA.correoAyuda}
           </a>
         </Contenedor>
       </div>
@@ -107,7 +107,7 @@ export default function Navbar({ currentUser, activeScreen, setActiveScreen, onO
               type="button"
               onClick={() => ir(currentUser ? 'panel' : 'landing')}
               className="-ml-1 self-center rounded-md p-1"
-              aria-label="Registro Nacional de Hinchas, ir al inicio"
+              aria-label="Fanpass, ir al inicio"
             >
               <span className="hidden sm:block">
                 <Logo />

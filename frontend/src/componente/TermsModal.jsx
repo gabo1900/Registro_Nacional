@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, ListOrdered, ChevronDown, CircleCheck } from 'lucide-react';
-import { TERMINOS_SECCIONES } from '../data/terminosAnfp';
+import { TERMINOS_SECCIONES } from '../data/terminos';
+import { MARCA } from '../data/marca';
 import { useFondoInerte } from '../registro/ui';
 import { Boton } from './ui';
 
@@ -132,7 +133,7 @@ function Contenido({ onCerrar, onAcceptTerms }) {
             <h2 id="terminos-titulo" className="text-titulo-3 font-bold leading-tight sm:text-titulo-2">
               Términos y condiciones
             </h2>
-            <p className="mt-1 text-[0.9375rem] text-tinta-tenue">Registro Nacional de Hinchas · ANFP</p>
+            <p className="mt-1 text-[0.9375rem] text-tinta-tenue">Fanpass</p>
           </div>
           <button
             ref={cerrarRef}
@@ -206,8 +207,8 @@ function Contenido({ onCerrar, onAcceptTerms }) {
         <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-linea bg-fondo px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p className="text-sm text-tinta-tenue">
             Dudas sobre tus datos:{' '}
-            <a href="mailto:ifierro@anfpchile.cl" className="font-bold text-marca-700 underline decoration-marca-200">
-              ifierro@anfpchile.cl
+            <a href={`mailto:${MARCA.correoPrivacidad}`} className="font-bold text-marca-700 underline decoration-marca-200">
+              {MARCA.correoPrivacidad}
             </a>
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">

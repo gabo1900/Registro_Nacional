@@ -1,10 +1,11 @@
 import React from 'react';
 import { Contenedor, Logo } from './ui';
+import { MARCA } from '../data/marca';
 
 const CONTACTOS = [
-  { para: 'Dudas o problemas con tu registro', correo: 'marketing@anfpchile.cl' },
-  { para: 'Ver, corregir o borrar tus datos', correo: 'enlacedehinchas@anfpchile.cl' },
-  { para: 'Encargado de protección de datos', correo: 'ifierro@anfpchile.cl' },
+  { para: 'Dudas o problemas con tu registro', correo: MARCA.correoAyuda },
+  { para: 'Ver, corregir o borrar tus datos', correo: MARCA.correoDatos },
+  { para: 'Encargado de protección de datos', correo: MARCA.correoPrivacidad },
 ];
 
 export default function Footer({ onOpenTerms }) {
@@ -15,10 +16,8 @@ export default function Footer({ onOpenTerms }) {
           <div className="space-y-4">
             <Logo claro />
             <p className="max-w-sm text-[0.9375rem] leading-relaxed">
-              Servicio oficial de la Asociación Nacional de Fútbol Profesional (ANFP) para ingresar a los estadios
-              del fútbol profesional chileno.
+              Registra tu rostro una vez y entra más rápido a los estadios.
             </p>
-            <p className="text-sm text-white/65">Avenida Quilín 5635, Peñalolén, Región Metropolitana.</p>
           </div>
 
           <div className="grid gap-8 sm:grid-cols-2">
@@ -56,7 +55,7 @@ export default function Footer({ onOpenTerms }) {
         </div>
 
         <p className="mt-10 border-t border-white/15 pt-6 text-sm text-white/65">
-          © {new Date().getFullYear()} ANFP · Registro Nacional de Hinchas · Ley N° 19.327 y Ley N° 19.628
+          © {new Date().getFullYear()} {MARCA.nombre} · Ley N° 19.327 y Ley N° 19.628
         </p>
       </Contenedor>
     </footer>

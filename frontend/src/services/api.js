@@ -1,7 +1,7 @@
 import { API_URL } from '../config/env';
 
 export async function apiFetch(endpoint, options = {}) {
-  const token = localStorage.getItem('rnh_jwt_token');
+  const token = localStorage.getItem('fanpass_jwt_token');
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -36,7 +36,7 @@ export async function apiFetch(endpoint, options = {}) {
       : await response.text();
 
     if (!response.ok) {
-      let message = 'Error en la comunicación con el servidor RNH.';
+      let message = 'Error en la comunicación con el servidor de Fanpass.';
       if (data && typeof data === 'object') {
         message = data.message || data.details || data.error || message;
       } else if (typeof data === 'string' && data.length > 0 && data.length < 300) {

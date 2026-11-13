@@ -26,7 +26,7 @@ async function registrarHuellaDelDispositivo(nombre) {
   const credencial = await navigator.credentials.create({
     publicKey: {
       challenge,
-      rp: { name: 'Registro Nacional de Hinchas', id: window.location.hostname },
+      rp: { name: 'Fanpass', id: window.location.hostname },
       user: { id: userId, name: nombre || 'hincha', displayName: nombre || 'Hincha' },
       pubKeyCredParams: [
         { alg: -7, type: 'public-key' },
@@ -130,7 +130,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
   const chequeos = [
     'Transfiriendo fotos y datos con cifrado de seguridad',
     'Cotejando rasgos faciales con la cédula mediante IA (Gemini 3.8)',
-    'Validando autenticidad en Registro Nacional de Hinchas',
+    'Validando tu identidad en Fanpass',
     ...(huella ? ['Guardando tu huella dactilar'] : []),
   ];
 
@@ -273,7 +273,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
     const casillas = [
       {
         campo: 'aceptaTerminosGenerales',
-        texto: 'Acepto los términos y condiciones del Registro Nacional de Hinchas.',
+        texto: 'Acepto los términos y condiciones de Fanpass.',
       },
       {
         campo: 'aceptaTratamientoBiometrico',
@@ -517,7 +517,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
           {fotoDocumento && foto && (
             <div className="flex items-center gap-2 py-3 px-3.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-800">
               <ShieldCheck className="size-4 text-emerald-600 shrink-0" />
-              Cotejo de identidad: Documento y Rostro listos para validación ANFP
+              Cotejo de identidad: Documento y Rostro listos para validación
             </div>
           )}
           {pasos.includes('huella') && (

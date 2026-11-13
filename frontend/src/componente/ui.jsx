@@ -1,8 +1,9 @@
 import React from 'react';
 import { Loader2, CircleCheck, TriangleAlert, CircleAlert, Info, ChevronDown, X } from 'lucide-react';
+import logoFanpass from '../assets/fanpass-logo.png';
 
 /*
- * Componentes base del sistema de diseño RNH.
+ * Componentes base del sistema de diseño Fanpass.
  * Todos usan los tokens de index.css (marca, tinta, ok, aviso, error).
  */
 
@@ -189,26 +190,20 @@ export function Desplegable({ titulo, icono: Icono, children, abierto, className
 }
 
 /**
- * Marca del RNH: sigla + filete + nombre, como un sello institucional.
- * Sin ícono en caja de color ni degradados.
+ * Marca Fanpass: logo oficial (ícono + nombre). En fondos oscuros se muestra en blanco.
  */
 export function Logo({ compacto = false, claro = false }) {
   return (
-    <span className="flex items-center gap-3 whitespace-nowrap text-left">
-      <span
-        className={cx(
-          'text-[1.625rem] font-bold leading-none tracking-[-0.03em]',
-          claro ? 'text-white' : 'text-marca-800'
-        )}
-      >
-        RNH
-      </span>
-      <span className={cx('h-8 w-px', claro ? 'bg-white/35' : 'bg-linea-fuerte')} aria-hidden="true" />
-      <span className={cx('leading-[1.15]', compacto ? 'text-[0.8125rem]' : 'text-[0.9375rem]')}>
-        <span className={cx('block font-bold', claro ? 'text-white' : 'text-tinta')}>Registro Nacional</span>
-        <span className={cx('block', claro ? 'text-white/75' : 'text-tinta-tenue')}>de Hinchas · Chile</span>
-      </span>
-    </span>
+    <img
+      src={logoFanpass}
+      alt="Fanpass"
+      className={cx(
+        'block w-auto select-none',
+        compacto ? 'h-12' : 'h-14',
+        claro && 'brightness-0 invert'
+      )}
+      draggable="false"
+    />
   );
 }
 
