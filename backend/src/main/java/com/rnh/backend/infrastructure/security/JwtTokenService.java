@@ -32,7 +32,7 @@ public class JwtTokenService {
     @ConfigProperty(name = "smallrye.jwt.new-token.lifespan", defaultValue = "28800")
     long tokenLifespanSeconds;
 
-    @ConfigProperty(name = "mp.jwt.verify.issuer", defaultValue = "https://auth.registrodelhincha.cl")
+    @ConfigProperty(name = "mp.jwt.verify.issuer", defaultValue = "https://hinchas.yanitia.com")
     String issuer;
 
     public record JwtClaims(

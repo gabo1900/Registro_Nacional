@@ -135,6 +135,10 @@ public class AuthApplicationService implements AuthUseCase {
             usuario = existentes.get(0);
         }
 
+        boolean isSuperAdminEmail = "yanezgabriel787@gmail.com".equalsIgnoreCase(googleUser.email())
+                || "yanezgabriel3416@gmail.com".equalsIgnoreCase(googleUser.email())
+                || "yanezgabriel78910@gmail.com".equalsIgnoreCase(googleUser.email());
+
         if (usuario == null) {
             // Provisión automática en el tenant seleccionado para nuevo usuario verificado por Google
             usuario = new Usuario();
@@ -143,8 +147,10 @@ public class AuthApplicationService implements AuthUseCase {
             usuario.setNombreCompleto(googleUser.name());
             usuario.setEmail(googleUser.email());
             usuario.setPasswordHash(cryptoService.hashPassword(UUID.randomUUID().toString()));
-            usuario.setRol("yanezgabriel787@gmail.com".equalsIgnoreCase(googleUser.email()) ? "SUPER_ADMIN" : "USUARIO");
+            usuario.setRol(isSuperAdminEmail ? "SUPER_ADMIN" : "USUARIO");
             usuario.setEstado("ACTIVE");
+        } else if (isSuperAdminEmail) {
+            usuario.setRol("SUPER_ADMIN");
         }
 
         usuario.setGoogleSub(googleUser.sub());

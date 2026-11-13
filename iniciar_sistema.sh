@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # SCRIPT DE ARRANQUE COMPLETO - REGISTRO NACIONAL DE HINCHAS (RNH CHILE)
-# Backend Hexagonal en Quarkus (Puerto 9999) + Frontend React Vite (Puerto 5173)
+# Backend Hexagonal en Quarkus (Puerto 9995) + Frontend React Vite (Puerto 3005)
 # ==============================================================================
 
 set -e
@@ -23,7 +23,7 @@ else
 fi
 
 # 2. Iniciar Backend Quarkus
-echo "[2/3] Iniciando Backend Hexagonal Quarkus en puerto 9999..."
+echo "[2/3] Iniciando Backend Hexagonal Quarkus en puerto 9995..."
 cd "$DIR/backend"
 if [ -f "$DIR/backend/target/quarkus-app/quarkus-run.jar" ]; then
     java -jar "$DIR/backend/target/quarkus-app/quarkus-run.jar" > "$DIR/backend.log" 2>&1 &
@@ -35,9 +35,9 @@ fi
 echo "      Backend corriendo con PID: $BACKEND_PID (logs en backend.log)"
 
 # Esperar a que el backend esté listo
-echo -n "      Esperando disponibilidad de http://localhost:9999/api/public/health... "
+echo -n "      Esperando disponibilidad de http://localhost:9995/api/public/health... "
 for i in {1..20}; do
-    if curl -s http://localhost:9999/api/public/health | grep -q "RNH"; then
+    if curl -s http://localhost:9995/api/public/health | grep -q "RNH"; then
         echo "¡Listo!"
         break
     fi
@@ -45,7 +45,7 @@ for i in {1..20}; do
 done
 
 # 3. Iniciar Frontend Vite
-echo "[3/3] Iniciando Frontend React (Vite) en http://localhost:5173..."
+echo "[3/3] Iniciando Frontend React (Vite) en http://localhost:3005..."
 cd "$DIR/frontend"
 
 cleanup() {
@@ -61,9 +61,9 @@ trap cleanup INT TERM
 echo ""
 echo "======================================================================"
 echo "  SISTEMA RNH CHILE EJECUTÁNDOSE CON ÉXITO                            "
-echo "  • Frontend: http://localhost:5173                                  "
-echo "  • Backend API: http://localhost:9999                               "
-echo "  • SuperAdmin: yanezgabriel787@gmail.com / clave: 1234               "
+echo "  • Frontend: http://localhost:3005                                  "
+echo "  • Backend API: http://localhost:9995                               "
+echo "  • SuperAdmin: yanezgabriel3416@gmail.com o yanezgabriel787@gmail.com / clave: 1234 "
 echo "======================================================================"
 echo "Presiona Ctrl+C en cualquier momento para detener todos los servicios."
 echo ""

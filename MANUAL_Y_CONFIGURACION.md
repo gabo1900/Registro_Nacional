@@ -110,20 +110,21 @@ Para activar la verificación real con Google OAuth 2.0:
 
 #### **Orígenes de JavaScript autorizados:**
 * Para pruebas locales:
-  * `http://localhost:5173`
-  * `http://localhost:3000`
-* Para cuando lo subas a producción:
-  * `https://registrodelhincha.cl` *(o tu dominio real)*
+  * `http://localhost:3005`
+* Para producción:
+  * `https://hinchas.yanitia.com`
+  * `https://www.hinchas.yanitia.com`
 
 #### **URIs de redirección autorizados:**
 * Para pruebas locales:
-  * `http://localhost:5173`
-  * `http://localhost:5173/auth/google/callback`
-  * `http://localhost:9999/api/auth/google`
-* Para cuando lo subas a producción:
-  * `https://registrodelhincha.cl`
-  * `https://registrodelhincha.cl/auth/google/callback`
-  * `https://api.registrodelhincha.cl/api/auth/google`
+  * `http://localhost:3005`
+  * `http://localhost:3005/auth/google/callback`
+  * `http://localhost:9995/api/auth/google`
+* Para producción:
+  * `https://hinchas.yanitia.com`
+  * `https://hinchas.yanitia.com/auth/google/callback`
+  * `https://www.hinchas.yanitia.com`
+  * `https://www.hinchas.yanitia.com/auth/google/callback`
 
 ### Paso 3: Pegar el Client ID en el proyecto
 Se han creado y preconfigurado los archivos `.env` tanto en el Frontend como en el Backend con tu Secreto de Cliente:
@@ -165,24 +166,18 @@ En el frontend tienes el archivo centralizado [`frontend/src/config/env.js`](fil
   export const USE_LOCAL = true;
   ```
   *Rutas automáticas:*
-  * Frontend: `http://localhost:5173`
-  * Backend API: `http://localhost:9999`
+  * Frontend: `http://localhost:3005`
+  * Backend API: `http://localhost:9995`
 
-* **Cuando lo subas al servidor:**
+* **Cuando lo subas al servidor (Producción):**
   Solo cambias esa línea a:
   ```javascript
   export const USE_LOCAL = false;
   ```
-  Y configuras tu dominio en `PRODUCTION_CONFIG`:
-  ```javascript
-  const PRODUCTION_CONFIG = {
-    FRONTEND_ORIGIN: 'https://registrodelhincha.cl',
-    API_BASE_URL: 'https://api.registrodelhincha.cl',
-    GOOGLE_REDIRECT_URI: 'https://registrodelhincha.cl/auth/google/callback',
-    BACKEND_GOOGLE_VERIFY_URL: 'https://api.registrodelhincha.cl/api/auth/google',
-    GOOGLE_CLIENT_ID: 'TU_CLIENT_ID_DE_PRODUCCION.apps.googleusercontent.com',
-  };
-  ```
+  *Rutas automáticas de Producción:*
+  * Frontend Oficial: `https://hinchas.yanitia.com` y `https://www.hinchas.yanitia.com`
+  * Backend API: `https://hinchas.yanitia.com/api`
+  * WebAuthn / Biometría RP: `hinchas.yanitia.com`
 
 ---
 

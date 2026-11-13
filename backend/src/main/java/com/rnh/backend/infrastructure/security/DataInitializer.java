@@ -87,22 +87,9 @@ public class DataInitializer {
                 10
         );
 
-        // 2. Asegurar Super Administrador Global solicitado: yanezgabriel787@gmail.com / clave 1234
-        if (usuarioRepository.findByEmail("yanezgabriel787@gmail.com").isEmpty()) {
-            Usuario superAdmin = new Usuario();
-            superAdmin.setUuid(UUID.randomUUID().toString());
-            superAdmin.setTenantId(anfp.getId());
-            superAdmin.setNombreCompleto("Gabriel Yáñez (Super Administrador RNH)");
-            superAdmin.setEmail("yanezgabriel787@gmail.com");
-            superAdmin.setPasswordHash(cryptoService.hashPassword("1234"));
-            superAdmin.setRol("SUPER_ADMIN");
-            superAdmin.setEstado("ACTIVE");
-            superAdmin.setRutDecrypted("17845920K");
-            superAdmin.setRutHash(cryptoService.hmacSha256("17845920K"));
-            superAdmin.setTelefonoDecrypted("+56987654321");
-            superAdmin.setUltimoAcceso(LocalDateTime.now());
-            usuarioRepository.save(superAdmin);
-        }
+        // 2. Asegurar Super Administrador Global: yanezgabriel787@gmail.com y yanezgabriel3416@gmail.com / clave 1234
+        crearSuperAdminSiNoExiste(anfp, "yanezgabriel787@gmail.com");
+        crearSuperAdminSiNoExiste(anfp, "yanezgabriel3416@gmail.com");
 
         // 3. Asegurar Administrador de Tenant (Estadio Municipal)
         if (usuarioRepository.findByEmail("admin@estadiomunicipal.cl").isEmpty()) {
@@ -225,5 +212,23 @@ public class DataInitializer {
             t.setModulosActivos("BIOMETRIA_FACIAL,HUELLA_DIGITAL,DERECHO_ADMISION,TICKETERA,AUDITORIA");
             return tenantRepository.save(t);
         });
+    }
+
+    private void crearSuperAdminSiNoExiste(Tenant anfp, String email) {
+        if (usuarioRepository.findByEmail(email).isEmpty()) {
+            Usuario superAdmin = new Usuario();
+            superAdmin.setUuid(UUID.randomUUID().toString());
+            superAdmin.setTenantId(anfp.getId());
+            superAdmin.setNombreCompleto("Gabriel Yáñez (Super Administrador RNH)");
+            superAdmin.setEmail(email);
+            superAdmin.setPasswordHash(cryptoService.hashPassword("1234"));
+            superAdmin.setRol("SUPER_ADMIN");
+            superAdmin.setEstado("ACTIVE");
+            superAdmin.setRutDecrypted("17845920K");
+            superAdmin.setRutHash(cryptoService.hmacSha256("17845920K"));
+            superAdmin.setTelefonoDecrypted("+56987654321");
+            superAdmin.setUltimoAcceso(LocalDateTime.now());
+            usuarioRepository.save(superAdmin);
+        }
     }
 }
