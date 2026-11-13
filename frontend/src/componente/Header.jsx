@@ -59,7 +59,7 @@ export default function Header({ onGoLogin, onGoRegister, onCheckFace }) {
                 </div>
                 <div>
                   <dt className="text-sm text-tinta-tenue">RUT</dt>
-                  <dd className="font-bold tabular-nums">••.•••.483-7</dd>
+                  <dd className="font-bold tabular-nums">12.***.***-7</dd>
                 </div>
               </dl>
               <p className="mt-4 flex items-center gap-2 rounded-lg bg-marca-50 px-3 py-2.5 text-[0.9375rem] font-bold text-marca-900">

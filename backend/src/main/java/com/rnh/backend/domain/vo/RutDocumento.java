@@ -79,13 +79,26 @@ public final class RutDocumento {
         return tipoDocumento;
     }
 
+    /**
+     * Formato único en todo el sistema (debe coincidir con enmascararDocumento del frontend):
+     * RUT 26.812.483-7 → 26.***.***-7 (solo los 2 primeros dígitos y el DV).
+     * Pasaporte AB123456 → AB*****6.
+     */
     public String getValorEnmascarado() {
-        if (valorNormalizado.length() <= 4) {
-            return "***" + valorNormalizado;
+        String v = valorNormalizado;
+        if ("CEDULA_CHILE".equalsIgnoreCase(tipoDocumento) && v.length() >= 2) {
+            String cuerpo = v.substring(0, v.length() - 1);
+            String dv = v.substring(v.length() - 1);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < cuerpo.length(); i++) {
+                int desdeFinal = cuerpo.length() - i;
+                if (i > 0 && desdeFinal % 3 == 0) sb.append('.');
+                sb.append(i < 2 ? cuerpo.charAt(i) : '*');
+            }
+            return sb + "-" + dv;
         }
-        String inicio = valorNormalizado.substring(0, Math.min(3, valorNormalizado.length() - 2));
-        String dv = valorNormalizado.substring(valorNormalizado.length() - 1);
-        return inicio + ".***-".concat(dv);
+        if (v.length() <= 3) return "*".repeat(v.length());
+        return v.substring(0, 2) + "*".repeat(v.length() - 3) + v.substring(v.length() - 1);
     }
 
     @Override

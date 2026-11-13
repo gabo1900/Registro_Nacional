@@ -82,7 +82,11 @@ export default function CapturaDocumento({ tipoDocumento, onCapturada, onCancela
 
   const dispararFoto = () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+    if (!video || !video.videoWidth) {
+      setError('La cámara aún no está lista. Espera un segundo e intenta de nuevo, o sube una foto de tu cédula.');
+      return;
+    }
+    setError('');
 
     const canvas = document.createElement('canvas');
     canvas.width = Math.min(1080, video.videoWidth);
@@ -161,7 +165,7 @@ export default function CapturaDocumento({ tipoDocumento, onCapturada, onCancela
 
       {modo === 'camara' && (
         <div className="relative overflow-hidden rounded-2xl bg-black text-white shadow-xl">
-          <div className="relative aspect-[16/10] w-full">
+          <div className="relative aspect-[16/10] w-full overflow-hidden">
             <video ref={videoRef} playsInline autoPlay muted className="size-full object-cover" />
 
             {/* Guía rectangular del documento */}

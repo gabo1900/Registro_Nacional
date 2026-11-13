@@ -222,7 +222,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
           if (!fotoDocumento) return setErrores({ fotoDocumento: 'Debes capturar o subir la foto de tu cédula para continuar.' });
           siguiente();
         }}
-        accion={<BotonPrincipal deshabilitado={!fotoDocumento}>Continuar</BotonPrincipal>}
+        accion={<BotonPrincipal disabled={!fotoDocumento}>Continuar</BotonPrincipal>}
       >
         <CapturaDocumento
           tipoDocumento={datos.tipoDocumento}

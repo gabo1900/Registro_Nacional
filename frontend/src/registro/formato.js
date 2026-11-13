@@ -39,17 +39,22 @@ export const digitosCelular = (valor = '') => valor.replace(/\D/g, '').replace(/
 export const formatearCelular = (digitos = '') =>
   digitos.length > 4 ? `${digitos.slice(0, 4)} ${digitos.slice(4)}` : digitos;
 
-/** ••.•••.678-5 — deja ver solo lo necesario para reconocerlo. */
+/**
+ * 26.***.***-7 — formato único en todo el sistema (debe coincidir con
+ * RutDocumento.getValorEnmascarado del backend). Solo los 2 primeros dígitos y el DV.
+ * Pasaporte AB123456 → AB*****6.
+ */
 export function enmascararDocumento(valor = '') {
   if (!valor) return '';
   if (rutEsValido(valor)) {
     const [cuerpo, dv] = formatearRut(valor).split('-');
-    let porOcultar = cuerpo.replace(/\D/g, '').length - 3;
-    const oculto = cuerpo.replace(/\d/g, (d) => (porOcultar-- > 0 ? '•' : d));
+    let visibles = 2;
+    const oculto = cuerpo.replace(/\d/g, (d) => (visibles-- > 0 ? d : '*'));
     return `${oculto}-${dv}`;
   }
-  const texto = valor.trim();
-  return texto.length <= 3 ? '•••' : '•'.repeat(texto.length - 3) + texto.slice(-3);
+  const texto = valor.trim().toUpperCase();
+  if (texto.length <= 3) return '*'.repeat(texto.length);
+  return texto.slice(0, 2) + '*'.repeat(texto.length - 3) + texto.slice(-1);
 }
 
 /** +56 9 •••• 5678 */
