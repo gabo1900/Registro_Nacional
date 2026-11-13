@@ -8,7 +8,16 @@ export async function apiFetch(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  // Normalizar base URL y endpoint para evitar duplicaciones como /api/api
+  const base = (API_URL || '').replace(/\/+$/, '');
+  let path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (base.endsWith('/api') && path.startsWith('/api/')) {
+    path = path.replace(/^\/api/, '');
+  }
+
+  const url = `${base}${path}`;
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });

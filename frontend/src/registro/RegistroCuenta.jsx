@@ -10,6 +10,13 @@ const PASOS = ['inicio', 'estadio', 'metodo', 'nombre', 'documento', 'celular', 
 // La creación de cuenta ocupa la primera mitad de la barra; la verificación, la segunda.
 const PESO_CUENTA = 0.45;
 
+const ESTADIOS_FALLBACK = [
+  { id: '02da80fb-f3b3-4c93-a90c-ec7dcc3d6462', codigo: 'anfp-central', nombre: 'ANFP Central Chile (Entidad Rectora)', ciudad: 'Santiago' },
+  { id: '2981ed7d-984b-497c-9a37-598904bc92fa', codigo: 'estadio-nacional', nombre: 'Estadio Nacional Julio Martínez', ciudad: 'Santiago' },
+  { id: '14efa5c0-4c0a-4452-a67e-b77288bc1237', codigo: 'monumental', nombre: 'Estadio Monumental (Blanco y Negro)', ciudad: 'Santiago' },
+  { id: '9691b2ce-d442-4be3-8c62-0eb17abbe2c5', codigo: 'estadio-municipal', nombre: 'Estadio Municipal Ester Roa', ciudad: 'Concepción' },
+];
+
 function GoogleIcono() {
   return (
     <svg className="size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
@@ -114,6 +121,8 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
   }
 
   if (paso === 'estadio') {
+    const listaEstadios = estadios && estadios.length > 0 ? estadios : ESTADIOS_FALLBACK;
+
     return (
       <PasoShell
         {...comun}
@@ -125,26 +134,18 @@ export default function RegistroCuenta({ estadios = [], onCerrar, onIrLogin, onA
         }}
         accion={<BotonPrincipal>Continuar</BotonPrincipal>}
       >
-        {estadios.length === 0 ? (
-          <div className="space-y-3" aria-busy="true" aria-label="Cargando estadios">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl bg-sutil motion-reduce:animate-none" />
-            ))}
-          </div>
-        ) : (
-          <div role="radiogroup" aria-label="Estadios" className="space-y-3">
-            {estadios.map((t) => (
-              <Opcion
-                key={t.id}
-                seleccionada={datos.tenantCodigo === t.codigo}
-                onClick={() => actualizar('tenantCodigo', t.codigo)}
-                titulo={t.nombre}
-                detalle={t.ciudad || t.region || undefined}
-                icono={<MapPin className="size-5" aria-hidden="true" />}
-              />
-            ))}
-          </div>
-        )}
+        <div role="radiogroup" aria-label="Estadios" className="space-y-3">
+          {listaEstadios.map((t) => (
+            <Opcion
+              key={t.id || t.codigo}
+              seleccionada={datos.tenantCodigo === t.codigo}
+              onClick={() => actualizar('tenantCodigo', t.codigo)}
+              titulo={t.nombre}
+              detalle={t.ciudad || t.region || undefined}
+              icono={<MapPin className="size-5" aria-hidden="true" />}
+            />
+          ))}
+        </div>
         {errores.tenantCodigo && (
           <div className="mt-4">
             <Aviso>{errores.tenantCodigo}</Aviso>
