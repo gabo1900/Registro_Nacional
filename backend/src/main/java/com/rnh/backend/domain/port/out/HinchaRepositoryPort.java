@@ -22,6 +22,7 @@ public interface HinchaRepositoryPort {
     HuellaBiometrica saveHuella(HuellaBiometrica huella);
     List<HuellaBiometrica> findHuellasByUsuarioId(Long usuarioId);
     Optional<HuellaBiometrica> findHuellaByCredentialId(String credentialId);
+    boolean deleteHuellaById(Long huellaId, Long usuarioId, String tenantId, boolean isSuperAdmin);
 
     SolicitudArco saveSolicitudArco(SolicitudArco solicitud);
     List<SolicitudArco> findSolicitudesArcoByUsuarioId(Long usuarioId);

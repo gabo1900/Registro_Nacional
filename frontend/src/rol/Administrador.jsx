@@ -61,6 +61,8 @@ export default function Administrador({ currentUser }) {
   const [buscarRutHincha, setBuscarRutHincha] = useState('');
   const [hinchaEncontrado, setHinchaEncontrado] = useState(null);
   const [enrolandoHuella, setEnrolandoHuella] = useState(false);
+  const [dedoSlot1, setDedoSlot1] = useState('INDICE_DERECHO');
+  const [dedoSlot2, setDedoSlot2] = useState('PULGAR_DERECHO');
 
   // Estado Ticketera
   const [ticketeraRut, setTicketeraRut] = useState('');
@@ -185,9 +187,13 @@ export default function Administrador({ currentUser }) {
     }
   };
 
-  const handleEnrolarHuellaDispositivo = async () => {
+  const handleEnrolarHuellaDispositivo = async (dedoParam = 'INDICE_DERECHO') => {
     if (!hinchaEncontrado?.hincha) {
       return setErrorMsg('Primero debes buscar un hincha por RUT para enrolarle la huella.');
+    }
+    const huellas = hinchaEncontrado.huellas || [];
+    if (huellas.length >= 2) {
+      return setErrorMsg('El hincha ya tiene el límite máximo de 2 huellas enroladas. Elimina una de las huellas para registrar otra.');
     }
     setErrorMsg('');
     setEnrolandoHuella(true);
@@ -237,18 +243,35 @@ export default function Administrador({ currentUser }) {
           credentialId: `FIDO2-${credId.substring(0, 30)}`,
           publicKey: pubKey,
           dispositivoTipo: 'Sensor Biométrico FIDO2 / Dispositivo Oficial',
-          dedoIndice: 'INDICE_DERECHO',
+          dedoIndice: dedoParam,
         }),
       });
 
-      setSuccessMsg(`¡Huella biométrica enrolada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
+      setSuccessMsg(`¡Huella biométrica (${dedoParam}) enrolada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
       // Refrescar ficha del hincha
-      handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+      await handleBuscarHincha(hinchaEncontrado.rutNormalizado);
       cargarDatosTenant();
     } catch (err) {
       setErrorMsg(err.message || 'Error al capturar la huella biométrica.');
     } finally {
       setEnrolandoHuella(false);
+    }
+  };
+
+  const handleEliminarHuella = async (huellaId, etiquetaHuella) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la ${etiquetaHuella}? El hincha no podrá ingresar usando este dedo.`)) {
+      return;
+    }
+    setErrorMsg('');
+    try {
+      await apiFetch(`/api/tenant/hinchas/huellas/${huellaId}`, {
+        method: 'DELETE',
+      });
+      setSuccessMsg(`¡${etiquetaHuella} eliminada con éxito!`);
+      await handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+      cargarDatosTenant();
+    } catch (err) {
+      setErrorMsg(err.message || 'Error al eliminar la huella.');
     }
   };
 
@@ -849,39 +872,172 @@ export default function Administrador({ currentUser }) {
                 </div>
               </div>
 
-              {/* Botón Acción: Encender Biométrico del Dispositivo */}
-              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6 text-center space-y-4">
-                <div className="max-w-md mx-auto space-y-1">
-                  <h4 className="font-extrabold text-base text-purple-950">
-                    Captura Criptográfica de Huella Digital (FIDO2)
-                  </h4>
-                  <p className="text-xs text-purple-800 leading-relaxed">
-                    Al hacer clic en el botón de abajo, el navegador solicitará autorización al sistema operativo y <strong>encenderá el lector biométrico físico de tu teléfono, laptop o terminal USB</strong>.
-                  </p>
+              {/* Sección de 2 Huellas Biométricas (Límite Máximo: 2) */}
+              <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/70 pb-4">
+                  <div>
+                    <h4 className="font-extrabold text-base text-purple-950 flex items-center gap-2">
+                      <Fingerprint className="w-5 h-5 text-purple-700" />
+                      Enrolamiento de Huellas Biométricas (Máx. 2)
+                    </h4>
+                    <p className="text-xs text-purple-800">
+                      Permite registrar hasta 2 huellas por RUT (Dedo Principal y Dedo de Respaldo).
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-extrabold self-start sm:self-auto ${
+                    (hinchaEncontrado.huellas?.length || 0) >= 2
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-purple-200/70 text-purple-900'
+                  }`}>
+                    {hinchaEncontrado.huellas?.length || 0} / 2 huellas registradas
+                  </span>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={enrolandoHuella}
-                  onClick={handleEnrolarHuellaDispositivo}
-                  className="px-8 py-4 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-extrabold text-base rounded-2xl shadow-lg flex items-center justify-center gap-3 mx-auto transition"
-                >
-                  <Fingerprint className={`w-6 h-6 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
-                  {enrolandoHuella ? 'Sensor Encendido: Apoya tu dedo en el lector…' : 'Encender Sensor Biométrico y Enrolar Huella'}
-                </button>
+                {/* Grid de 2 Slots: Huella 1 y Huella 2 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* SLOT 1: HUELLA 1 (PRINCIPAL) */}
+                  <div className="bg-white rounded-xl p-4 border border-purple-200 shadow-sm flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Huella 1 (Principal)</span>
+                        {hinchaEncontrado.huellas?.[0] ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ENROLADA
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                            DISPONIBLE
+                          </span>
+                        )}
+                      </div>
 
-                {hinchaEncontrado.huellas?.length > 0 && (
-                  <div className="pt-4 border-t border-purple-200/60 max-w-lg mx-auto text-left">
-                    <span className="text-xs font-bold text-purple-900 block mb-2">Credenciales Biométricas Activas:</span>
-                    <div className="space-y-1.5 text-xs font-mono">
-                      {hinchaEncontrado.huellas.map((h) => (
-                        <div key={h.id} className="bg-white px-3 py-2 rounded-lg border border-purple-200 flex justify-between items-center">
-                          <span className="text-slate-800 truncate max-w-[280px]">{h.credentialId}</span>
-                          <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-sans font-bold">ACTIVO</span>
+                      {hinchaEncontrado.huellas?.[0] ? (
+                        <div className="mt-3 space-y-1">
+                          <p className="text-sm font-extrabold text-slate-900">
+                            {hinchaEncontrado.huellas[0].dedoIndice?.replace('_', ' ') || 'Dedo Principal'}
+                          </p>
+                          <p className="text-[11px] font-mono text-slate-500 truncate" title={hinchaEncontrado.huellas[0].credentialId}>
+                            ID: {hinchaEncontrado.huellas[0].credentialId}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Tipo: {hinchaEncontrado.huellas[0].dispositivoTipo}
+                          </p>
                         </div>
-                      ))}
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <label className="text-xs font-semibold text-slate-700 block">Dedo a registrar:</label>
+                          <select
+                            value={dedoSlot1}
+                            onChange={(e) => setDedoSlot1(e.target.value)}
+                            className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2 bg-slate-50"
+                          >
+                            <option value="INDICE_DERECHO">Índice Derecho (Recomendado)</option>
+                            <option value="PULGAR_DERECHO">Pulgar Derecho</option>
+                            <option value="INDICE_IZQUIERDO">Índice Izquierdo</option>
+                            <option value="PULGAR_IZQUIERDO">Pulgar Izquierdo</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2">
+                      {hinchaEncontrado.huellas?.[0] ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarHuella(hinchaEncontrado.huellas[0].id, 'Huella 1')}
+                          className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Eliminar Huella 1
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={enrolandoHuella}
+                          onClick={() => handleEnrolarHuellaDispositivo(dedoSlot1)}
+                          className="w-full py-2.5 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
+                        >
+                          <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                          {enrolandoHuella ? 'Sensor Encendido…' : 'Enrolar Huella 1'}
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {/* SLOT 2: HUELLA 2 (RESPALDO) */}
+                  <div className="bg-white rounded-xl p-4 border border-purple-200 shadow-sm flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Huella 2 (Respaldo)</span>
+                        {hinchaEncontrado.huellas?.[1] ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ENROLADA
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                            DISPONIBLE
+                          </span>
+                        )}
+                      </div>
+
+                      {hinchaEncontrado.huellas?.[1] ? (
+                        <div className="mt-3 space-y-1">
+                          <p className="text-sm font-extrabold text-slate-900">
+                            {hinchaEncontrado.huellas[1].dedoIndice?.replace('_', ' ') || 'Dedo Respaldo'}
+                          </p>
+                          <p className="text-[11px] font-mono text-slate-500 truncate" title={hinchaEncontrado.huellas[1].credentialId}>
+                            ID: {hinchaEncontrado.huellas[1].credentialId}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Tipo: {hinchaEncontrado.huellas[1].dispositivoTipo}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <label className="text-xs font-semibold text-slate-700 block">Dedo a registrar:</label>
+                          <select
+                            value={dedoSlot2}
+                            onChange={(e) => setDedoSlot2(e.target.value)}
+                            className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2 bg-slate-50"
+                          >
+                            <option value="PULGAR_DERECHO">Pulgar Derecho (Recomendado)</option>
+                            <option value="INDICE_IZQUIERDO">Índice Izquierdo</option>
+                            <option value="PULGAR_IZQUIERDO">Pulgar Izquierdo</option>
+                            <option value="INDICE_DERECHO">Índice Derecho</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2">
+                      {hinchaEncontrado.huellas?.[1] ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarHuella(hinchaEncontrado.huellas[1].id, 'Huella 2')}
+                          className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Eliminar Huella 2
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={enrolandoHuella}
+                          onClick={() => handleEnrolarHuellaDispositivo(dedoSlot2)}
+                          className="w-full py-2.5 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
+                        >
+                          <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                          {enrolandoHuella ? 'Sensor Encendido…' : 'Enrolar Huella 2'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {(hinchaEncontrado.huellas?.length || 0) >= 2 && (
+                  <p className="text-xs text-center text-slate-500 font-medium">
+                    ℹ️ Límite completado (2 huellas). Si deseas enrolar un dedo diferente, elimina una de las huellas activas.
+                  </p>
                 )}
               </div>
             </div>

@@ -313,6 +313,21 @@ public class TenantAdminResource {
         );
     }
 
+    @DELETE
+    @Path("/hinchas/huellas/{huellaId}")
+    public Map<String, Object> eliminarHuellaAdmin(
+            @HeaderParam("Authorization") String authHeader,
+            @PathParam("huellaId") Long huellaId
+    ) {
+        JwtTokenService.JwtClaims claims = requireTenantAdminOrOperator(authHeader);
+        String tenantId = resolveTenantId(claims);
+        boolean ok = enrolarHinchaUseCase.eliminarHuella(huellaId, null, tenantId, claims.isSuperAdmin());
+        if (!ok) {
+            throw new IllegalArgumentException("No se encontró la huella biométrica indicada o no tiene permisos para eliminarla.");
+        }
+        return Map.of("eliminada", true, "huellaId", huellaId);
+    }
+
     @POST
     @Path("/hinchas/enrolar-biometria")
     public Hincha enrolarBiometriaAdmin(

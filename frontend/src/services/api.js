@@ -17,22 +17,40 @@ export async function apiFetch(endpoint, options = {}) {
 
   const url = `${base}${path}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const timeoutMs = options.timeoutMs || 35000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const contentType = response.headers.get('content-type') || '';
-  const data = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
 
-  if (!response.ok) {
-    const message =
-      (data && typeof data === 'object' && data.message) ||
-      'Error en la comunicación con el servidor RNH.';
-    throw new Error(message);
+    clearTimeout(timer);
+
+    const contentType = response.headers.get('content-type') || '';
+    const data = contentType.includes('application/json')
+      ? await response.json()
+      : await response.text();
+
+    if (!response.ok) {
+      let message = 'Error en la comunicación con el servidor RNH.';
+      if (data && typeof data === 'object') {
+        message = data.message || data.details || data.error || message;
+      } else if (typeof data === 'string' && data.length > 0 && data.length < 300) {
+        message = data;
+      }
+      throw new Error(message);
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error('Tiempo de espera agotado al conectar con el servidor central de identidad. Verifique su señal e intente de nuevo.');
+    }
+    throw err;
   }
-
-  return data;
 }

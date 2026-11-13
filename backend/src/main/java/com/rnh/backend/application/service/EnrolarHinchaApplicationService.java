@@ -35,6 +35,9 @@ public class EnrolarHinchaApplicationService implements EnrolarHinchaUseCase {
     @Inject
     CryptoService cryptoService;
 
+    @Inject
+    com.rnh.backend.infrastructure.adapter.out.biometric.FingerprintVerificationService fingerprintVerificationService;
+
     @Override
     public Hincha obtenerPerfilHincha(Long usuarioId) {
         return hinchaRepository.findByUsuarioId(usuarioId).orElse(null);
@@ -116,6 +119,57 @@ public class EnrolarHinchaApplicationService implements EnrolarHinchaUseCase {
             throw new IllegalArgumentException("El identificador de credencial biométrica (credentialId) es obligatorio.");
         }
 
+        // 1. Obtener huellas activas existentes del usuario
+        List<HuellaBiometrica> huellasExistentes = hinchaRepository.findHuellasByUsuarioId(usuarioId);
+
+        // 2. Comprobar si esta misma huella ya está enrolada (comparar contra Huella 1 y Huella 2)
+        String newKey = publicKeyRaw != null ? publicKeyRaw.trim() : "";
+        for (int i = 0; i < huellasExistentes.size(); i++) {
+            HuellaBiometrica h = huellasExistentes.get(i);
+            int numeroHuella = i + 1;
+            String nombreDedo = h.getDedoIndice() != null ? h.getDedoIndice() : ("Huella " + numeroHuella);
+
+            // A. Cotejo de minucias con SourceAFIS (sensores de huella USB / Dahua / plantillas)
+            if (!newKey.isBlank() && h.getPublicKeyEncrypted() != null) {
+                try {
+                    String storedDecrypted = cryptoService.decryptAesGcm(h.getPublicKeyEncrypted());
+                    byte[] probeBytes = newKey.startsWith("{")
+                            ? newKey.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                            : java.util.Base64.getDecoder().decode(newKey);
+                    com.rnh.backend.infrastructure.adapter.out.biometric.FingerprintVerificationService.FingerprintMatchResult matchRes =
+                            fingerprintVerificationService.cotejarHuellas(storedDecrypted, probeBytes);
+                    if (matchRes.coincide()) {
+                        throw new IllegalArgumentException(
+                                "Esta huella dactilar ya está enrolada en el sistema (corresponde a la Huella " + numeroHuella + ": " + nombreDedo + "). Debe usar un dedo diferente."
+                        );
+                    }
+                } catch (IllegalArgumentException iae) {
+                    throw iae;
+                } catch (Exception ignored) {}
+            }
+
+            // B. Cotejo de Credential ID (FIDO2 / Hardware token)
+            if (h.getCredentialId().equalsIgnoreCase(credentialId.trim())) {
+                throw new IllegalArgumentException(
+                        "Esta huella ya está enrolada en el sistema (corresponde a la Huella " + numeroHuella + ": " + nombreDedo + "). Debe usar un dedo diferente."
+                );
+            }
+
+            // C. Cotejo de dedo anatómico seleccionado
+            if (dedoIndice != null && !dedoIndice.isBlank() && dedoIndice.equalsIgnoreCase(h.getDedoIndice())) {
+                throw new IllegalArgumentException(
+                        "Esta huella ya está enrolada (corresponde a la Huella " + numeroHuella + ": " + nombreDedo + "). Debe seleccionar un dedo diferente para la Huella " + (huellasExistentes.size() + 1) + "."
+                );
+            }
+        }
+
+        // 3. Límite estricto: solo se pueden enrolar 2 huellas por hincha
+        if (huellasExistentes.size() >= 2) {
+            throw new IllegalArgumentException(
+                    "El hincha ya tiene el límite máximo de 2 huellas enroladas. Si desea registrar una nueva huella, primero debe eliminar la Huella 1 o la Huella 2."
+            );
+        }
+
         Hincha hincha = hinchaRepository.findByUsuarioId(usuarioId).orElseGet(() -> {
             Usuario u = usuarioRepository.findById(usuarioId)
                     .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
@@ -140,19 +194,52 @@ public class EnrolarHinchaApplicationService implements EnrolarHinchaUseCase {
         hincha.setHuellaRegistrada(true);
         hinchaRepository.save(hincha, null);
 
+        // Asignación de dedo por defecto si no se especificó
+        String dedoFinal = dedoIndice;
+        if (dedoFinal == null || dedoFinal.isBlank()) {
+            if (huellasExistentes.isEmpty()) {
+                dedoFinal = "INDICE_DERECHO";
+            } else {
+                dedoFinal = "INDICE_DERECHO".equalsIgnoreCase(huellasExistentes.get(0).getDedoIndice())
+                        ? "PULGAR_DERECHO"
+                        : "INDICE_DERECHO";
+            }
+        }
+
         HuellaBiometrica huella = new HuellaBiometrica();
         huella.setHinchaId(hincha.getId());
         huella.setUsuarioId(usuarioId);
         huella.setTenantId(hincha.getTenantId());
         huella.setCredentialId(credentialId.trim());
-        huella.setPublicKeyEncrypted(publicKeyRaw != null && !publicKeyRaw.isBlank() ? publicKeyRaw : "COSE_PUBKEY_" + credentialId);
+        String rawKeyOrTemplate = publicKeyRaw != null && !publicKeyRaw.isBlank() ? publicKeyRaw : "COSE_PUBKEY_" + credentialId;
+        huella.setPublicKeyEncrypted(cryptoService.encryptAesGcm(rawKeyOrTemplate));
         huella.setHuellaHash(cryptoService.hmacSha256(credentialId + ":" + usuarioId));
         huella.setDispositivoTipo(dispositivoTipo != null && !dispositivoTipo.isBlank() ? dispositivoTipo : "WEBAUTHN_FIDO2_SENSOR");
-        huella.setDedoIndice(dedoIndice != null && !dedoIndice.isBlank() ? dedoIndice : "INDICE_DERECHO");
+        huella.setDedoIndice(dedoFinal);
         huella.setSignCount(1L);
         huella.setActivo(true);
 
         return hinchaRepository.saveHuella(huella);
+    }
+
+    @Override
+    @Transactional
+    public boolean eliminarHuella(Long huellaId, Long usuarioId, String tenantId, boolean isSuperAdmin) {
+        if (huellaId == null) return false;
+        boolean eliminada = hinchaRepository.deleteHuellaById(huellaId, usuarioId, tenantId, isSuperAdmin);
+        if (eliminada) {
+            // Si el hincha se queda sin huellas, actualizar la bandera en Hincha
+            if (usuarioId != null) {
+                List<HuellaBiometrica> restantes = hinchaRepository.findHuellasByUsuarioId(usuarioId);
+                if (restantes.isEmpty()) {
+                    hinchaRepository.findByUsuarioId(usuarioId).ifPresent(hincha -> {
+                        hincha.setHuellaRegistrada(false);
+                        hinchaRepository.save(hincha, null);
+                    });
+                }
+            }
+        }
+        return eliminada;
     }
 
     @Override

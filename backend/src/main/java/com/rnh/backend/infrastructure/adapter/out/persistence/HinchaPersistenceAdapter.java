@@ -140,7 +140,7 @@ public class HinchaPersistenceAdapter implements HinchaRepositoryPort {
 
     @Override
     public List<HuellaBiometrica> findHuellasByUsuarioId(Long usuarioId) {
-        List<HuellaBiometricaEntity> list = HuellaBiometricaEntity.list("usuarioId", Sort.by("id").descending(), usuarioId);
+        List<HuellaBiometricaEntity> list = HuellaBiometricaEntity.list("usuarioId = ?1 and activo = true", Sort.by("id").ascending(), usuarioId);
         return list.stream().map(this::toDomainHuella).toList();
     }
 
@@ -149,6 +149,19 @@ public class HinchaPersistenceAdapter implements HinchaRepositoryPort {
         if (credentialId == null || credentialId.isBlank()) return Optional.empty();
         HuellaBiometricaEntity entity = HuellaBiometricaEntity.find("credentialId = ?1 and activo = true", credentialId).firstResult();
         return Optional.ofNullable(entity).map(this::toDomainHuella);
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteHuellaById(Long huellaId, Long usuarioId, String tenantId, boolean isSuperAdmin) {
+        HuellaBiometricaEntity entity = HuellaBiometricaEntity.findById(huellaId);
+        if (entity == null) return false;
+        if (!isSuperAdmin) {
+            if (usuarioId != null && !entity.usuarioId.equals(usuarioId)) return false;
+            if (tenantId != null && !tenantId.isBlank() && !entity.tenantId.equalsIgnoreCase(tenantId)) return false;
+        }
+        entity.delete();
+        return true;
     }
 
     @Override

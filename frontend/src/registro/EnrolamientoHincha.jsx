@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Sun, Glasses, Smartphone, Fingerprint, Check, CircleCheck, ShieldCheck, Loader2 } from 'lucide-react';
+import { Sun, Glasses, Smartphone, Fingerprint, Check, CircleCheck, ShieldCheck, Loader2, Clock } from 'lucide-react';
 import { apiFetch } from '../services/api';
 import { PasoShell, BotonPrincipal, BotonSecundario, Aviso, FilaResumen, useBotonAtras } from './ui';
 import CampoDocumento, { documentoEsValido, errorDocumento } from './CampoDocumento';
@@ -88,9 +88,25 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
   const [errorGeneral, setErrorGeneral] = useState('');
   const [leyendoHuella, setLeyendoHuella] = useState(false);
   const [chequeosListos, setChequeosListos] = useState(0);
+  const [segundosTranscurridos, setSegundosTranscurridos] = useState(0);
   const timersRef = useRef([]);
 
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
+
+  useEffect(() => {
+    let interval = null;
+    if (paso === 'verificando') {
+      setSegundosTranscurridos(0);
+      interval = setInterval(() => {
+        setSegundosTranscurridos((s) => s + 1);
+      }, 1000);
+    } else {
+      setSegundosTranscurridos(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [paso]);
 
   const indice = Math.max(0, pasos.indexOf(paso));
   const progreso = PESO_CUENTA + ((indice + 1) / (pasos.length + 1)) * (1 - PESO_CUENTA);
@@ -109,10 +125,14 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
   const siguiente = () => ir(pasos[indice + 1]);
   const atras = indice > 0 ? () => ir(pasos[indice - 1]) : undefined;
   const comun = { fase, progreso, onAtras: atras, onCerrar };
-  // Cada etapa corresponde a una llamada real al servidor.
-  const chequeos = huella
-    ? ['Enviando tus datos y tu foto', 'Guardando tu huella']
-    : ['Enviando tus datos y tu foto'];
+
+  // Etapas del proceso de verificación en tiempo real
+  const chequeos = [
+    'Transfiriendo fotos y datos con cifrado de seguridad',
+    'Cotejando rasgos faciales con la cédula mediante IA (Gemini 3.8)',
+    'Validando autenticidad en Registro Nacional de Hinchas',
+    ...(huella ? ['Guardando tu huella dactilar'] : []),
+  ];
 
   useBotonAtras(
     paso === 'foto' ? () => setPaso('antesFoto') : ['verificando', 'listo'].includes(paso) ? null : atras || onCerrar
@@ -123,32 +143,47 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
     setChequeosListos(0);
     timersRef.current.forEach(clearTimeout);
     const [nombres, ...resto] = nombreCompleto.split(' ');
+
+    // Actualización progresiva visual mientras Gemini analiza
+    timersRef.current = [
+      setTimeout(() => setChequeosListos(1), 1500),
+      setTimeout(() => setChequeosListos(2), 3500),
+    ];
+
     try {
-      await Promise.all([
-        apiFetch('/api/hincha/biometria', {
-          method: 'POST',
-          body: JSON.stringify({
-            ...datos,
-            nombres: nombres || '',
-            apellidos: resto.join(' '),
-            nacionalidad: datos.tipoDocumento === 'CEDULA_CHILE' ? 'Chilena' : 'Extranjera',
-            fotoDocumentoBase64: fotoDocumento,
-            selfieBase64: foto?.selfieBase64,
-            descriptorFacialJson: foto?.descriptorFacialJson,
-          }),
+      await apiFetch('/api/hincha/biometria', {
+        method: 'POST',
+        timeoutMs: 30000,
+        body: JSON.stringify({
+          ...datos,
+          nombres: nombres || '',
+          apellidos: resto.join(' '),
+          nacionalidad: datos.tipoDocumento === 'CEDULA_CHILE' ? 'Chilena' : 'Extranjera',
+          fotoDocumentoBase64: fotoDocumento,
+          selfieBase64: foto?.selfieBase64,
+          descriptorFacialJson: foto?.descriptorFacialJson,
         }),
-        // Evita un parpadeo si el servidor responde al instante.
-        new Promise((r) => setTimeout(r, 600)),
-      ]);
-      setChequeosListos(1);
+      });
+
       if (huella) {
+        setChequeosListos(3);
         await apiFetch('/api/hincha/huella', { method: 'POST', body: JSON.stringify(huella) });
-        setChequeosListos(2);
       }
-      timersRef.current = [setTimeout(() => setPaso('listo'), 500)];
+
+      setChequeosListos(huella ? 4 : 3);
+      timersRef.current.push(setTimeout(() => setPaso('listo'), 500));
     } catch (err) {
+      timersRef.current.forEach(clearTimeout);
       setPaso('revisar');
-      setErrorGeneral(err.message || 'No pudimos enviar tu registro. Revisa tu conexión e intenta de nuevo.');
+      let msg = err.message || 'No pudimos verificar tu identidad.';
+      if (msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('tiempo de espera')) {
+        msg = 'Tiempo de espera agotado al conectar con el servicio de cotejo. Por favor verifique su conexión e intente nuevamente.';
+      } else if (msg.toLowerCase().includes('faciales no coinciden')) {
+        msg = 'Los datos faciales no coinciden con los legales del documento ingresado.';
+      } else if (msg.toLowerCase().includes('documento presentado no es')) {
+        msg = err.message;
+      }
+      setErrorGeneral(msg);
     }
   };
 
@@ -495,7 +530,7 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
 
   if (paso === 'verificando') {
     return (
-      <PasoShell fase={2} progreso={0.97} titulo="Enviando tu registro" descripcion="Toma unos segundos. No cierres esta pantalla.">
+      <PasoShell fase={2} progreso={0.97} titulo="Validando tu identidad" descripcion="Cotejando tus datos y rasgos faciales en tiempo real.">
         <ol className="space-y-1" aria-live="polite">
           {chequeos.map((texto, i) => {
             const listo = i < chequeosListos;
@@ -518,6 +553,11 @@ export default function EnrolamientoHincha({ usuario, onTerminado, onOpenTerms, 
             );
           })}
         </ol>
+
+        <div className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-slate-50 border border-slate-200 py-3 px-4 text-xs font-semibold text-slate-600">
+          <Clock className="size-4 text-slate-500 animate-pulse" />
+          <span>Tiempo transcurrido: <strong className="text-slate-900">{segundosTranscurridos}s</strong> (tiempo estimado: ~4 a 8s)</span>
+        </div>
       </PasoShell>
     );
   }

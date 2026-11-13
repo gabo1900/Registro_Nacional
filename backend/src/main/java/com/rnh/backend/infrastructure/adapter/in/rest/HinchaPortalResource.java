@@ -119,6 +119,20 @@ public class HinchaPortalResource {
         );
     }
 
+    @jakarta.ws.rs.DELETE
+    @Path("/huella/{huellaId}")
+    public Map<String, Object> eliminarMiHuella(
+            @HeaderParam("Authorization") String authHeader,
+            @jakarta.ws.rs.PathParam("huellaId") Long huellaId
+    ) {
+        JwtTokenService.JwtClaims claims = requireAuthenticated(authHeader);
+        boolean ok = enrolarHinchaUseCase.eliminarHuella(huellaId, claims.userId(), claims.tenantId(), claims.isSuperAdmin());
+        if (!ok) {
+            throw new IllegalArgumentException("No se encontró la huella para eliminar.");
+        }
+        return Map.of("eliminada", true, "huellaId", huellaId);
+    }
+
     @POST
     @Path("/arco")
     public SolicitudArco ejercerDerechoArco(

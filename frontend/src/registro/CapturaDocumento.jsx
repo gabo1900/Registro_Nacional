@@ -3,6 +3,38 @@ import { Camera, ImageUp, RotateCcw, Check, IdCard, AlertCircle } from 'lucide-r
 import { BotonPrincipal, BotonSecundario, Aviso } from './ui';
 
 /**
+ * Comprime y redimensiona una imagen antes de enviarla, garantizando
+ * transferencia instantánea y máxima legibilidad forense para el OCR.
+ */
+function procesarYComprimirArchivo(file, maxW = 1200, maxH = 900, calidad = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', calidad));
+      };
+      img.onerror = () => reject(new Error('No se pudo procesar la imagen seleccionada.'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Componente para captura y subida fotográfica de la Cédula de Identidad o Pasaporte.
  * Permite capturar con la cámara del dispositivo o subir una foto nítida del anverso.
  */
@@ -64,7 +96,7 @@ export default function CapturaDocumento({ tipoDocumento, onCapturada, onCancela
     setModo('preview');
   };
 
-  const manejarArchivo = (e) => {
+  const manejarArchivo = async (e) => {
     setError('');
     const file = e.target.files?.[0];
     if (!file) return;
@@ -73,15 +105,13 @@ export default function CapturaDocumento({ tipoDocumento, onCapturada, onCancela
       return setError('Por favor selecciona un archivo de imagen válido (JPG, PNG).');
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setFotoBase64(event.target.result);
+    try {
+      const b64 = await procesarYComprimirArchivo(file);
+      setFotoBase64(b64);
       setModo('preview');
-    };
-    reader.onerror = () => {
-      setError('No pudimos leer la imagen seleccionada. Intenta con otra.');
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setError('No pudimos procesar la imagen seleccionada. Intenta con otra foto.');
+    }
   };
 
   const reintentar = () => {

@@ -10,6 +10,7 @@ import com.rnh.backend.domain.port.out.HinchaRepositoryPort;
 import com.rnh.backend.domain.port.out.ProhibicionRepositoryPort;
 import com.rnh.backend.domain.vo.NivelConfianza;
 import com.rnh.backend.domain.vo.RutDocumento;
+import com.rnh.backend.infrastructure.adapter.out.biometric.FingerprintVerificationService;
 import com.rnh.backend.infrastructure.security.CryptoService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -33,6 +34,9 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
 
     @Inject
     CryptoService cryptoService;
+
+    @Inject
+    FingerprintVerificationService fingerprintVerificationService;
 
     @ConfigProperty(name = "rnh.biometric.api.similarity-threshold", defaultValue = "0.88")
     double similarityThreshold;
@@ -145,10 +149,34 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
             );
         }
 
-        // 3. Evaluación Biométrica (Facial o Huella)
+        // 3. Evaluación Biométrica (Facial o Huella Dactilar Hardware / FIDO2)
         double score;
-        if ("CONTROL_PUERTA_HUELLA".equalsIgnoreCase(modo) && huellaCredentialId != null && !huellaCredentialId.isBlank()) {
-            score = 0.994; // Coincidencia criptográfica de clave pública FIDO2/Huella
+        if ("CONTROL_PUERTA_HUELLA".equalsIgnoreCase(modo)) {
+            List<HuellaBiometrica> huellas = hinchaRepository.findHuellasByUsuarioId(hincha.getUsuarioId());
+            if (huellas.isEmpty()) {
+                score = 0.0;
+            } else {
+                HuellaBiometrica h = huellas.get(0);
+                if (capturaEnVivoBase64 != null && !capturaEnVivoBase64.isBlank()) {
+                    try {
+                        String cleanB64 = capturaEnVivoBase64.contains(",")
+                                ? capturaEnVivoBase64.substring(capturaEnVivoBase64.indexOf(",") + 1)
+                                : capturaEnVivoBase64;
+                        byte[] probeBytes = java.util.Base64.getDecoder().decode(cleanB64.trim());
+                        String storedTemplate = cryptoService.decryptAesGcm(h.getPublicKeyEncrypted());
+                        FingerprintVerificationService.FingerprintMatchResult matchRes =
+                                fingerprintVerificationService.cotejarHuellas(storedTemplate, probeBytes);
+                        score = matchRes.coincide() ? 0.992 : (matchRes.score() > 0 ? (matchRes.score() / 100.0) : 0.05);
+                    } catch (Exception e) {
+                        score = 0.0;
+                    }
+                } else if (huellaCredentialId != null && !huellaCredentialId.isBlank()) {
+                    // Verificación FIDO2 / WebAuthn
+                    score = h.getCredentialId().equals(huellaCredentialId.trim()) ? 0.994 : 0.0;
+                } else {
+                    score = 0.0;
+                }
+            }
         } else {
             String vectorDesencriptado = hinchaRepository.findVectorCifradoByHinchaId(hincha.getId()).orElse(null);
             score = biometricProvider.verificarIdentidadEnPuerta(

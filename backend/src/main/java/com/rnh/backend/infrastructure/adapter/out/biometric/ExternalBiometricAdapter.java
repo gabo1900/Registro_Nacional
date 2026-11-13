@@ -65,17 +65,32 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
             vectorToStore = deriveDeterministicVector(documentoId, selfieBase64);
         }
 
-        // Análisis del documento y cotejo con Gemini (si está configurado) o validación biométrica local
+        // Análisis forense del documento y cotejo biométrico con Gemini Multimodal
         GeminiVerificationService.DocumentAnalysisResult analisis = geminiVerificationService.analizarDocumentoYCotejo(
                 fotoDocumentoBase64,
                 selfieBase64,
                 documentoId
         );
 
-        String tokenRef = "RNH-BIO-" + UUID.randomUUID().toString().substring(0, 13).toUpperCase();
-        double livenessScore = analisis.coincidenciaRostroDocumento() > 0 ? analisis.coincidenciaRostroDocumento() : 0.984;
+        if (!analisis.documentoValido()) {
+            throw new SecurityException("El documento presentado no es una cédula de identidad válida: " + analisis.dictamen());
+        }
 
-        // Las referencias a fotoDocumentoBase64 y selfieBase64 nunca se persisten (Zero-Retention)
+        if (!analisis.rutCoincide()) {
+            String rutDet = (analisis.rutDetectado() != null && !analisis.rutDetectado().isBlank())
+                    ? analisis.rutDetectado()
+                    : "No detectable";
+            throw new SecurityException("El RUT del documento presentado (" + rutDet + ") no coincide con el RUT registrado (" + documentoId + ").");
+        }
+
+        if (analisis.coincidenciaRostroDocumento() < 0.70) {
+            throw new SecurityException("Los datos faciales no coinciden con los legales del documento ingresado.");
+        }
+
+        String tokenRef = "RNH-BIO-" + UUID.randomUUID().toString().substring(0, 13).toUpperCase();
+        double livenessScore = analisis.coincidenciaRostroDocumento();
+
+        // Las referencias a fotoDocumentoBase64 y selfieBase64 nunca se persisten en texto plano
         return new VectorBiometricoRef(
                 tokenRef,
                 cryptoService.encryptAesGcm(vectorToStore),
@@ -113,7 +128,7 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
 
     private double computeCosineSimilarity(List<Double> v1, List<Double> v2) {
         int len = Math.min(v1.size(), v2.size());
-        if (len == 0) return 0.95;
+        if (len == 0) return 0.0;
         double dot = 0.0, normA = 0.0, normB = 0.0;
         for (int i = 0; i < len; i++) {
             double a = v1.get(i);
@@ -122,9 +137,9 @@ public class ExternalBiometricAdapter implements BiometricProviderPort {
             normA += a * a;
             normB += b * b;
         }
-        if (normA == 0 || normB == 0) return 0.94;
+        if (normA == 0 || normB == 0) return 0.0;
         double cosine = dot / (Math.sqrt(normA) * Math.sqrt(normB));
-        return Math.max(0.89, Math.min(0.998, (cosine + 1.0) / 2.0));
+        return Math.max(0.0, Math.min(1.0, (cosine + 1.0) / 2.0));
     }
 
     private String deriveDeterministicVector(String documentoId, String selfieBase64) {

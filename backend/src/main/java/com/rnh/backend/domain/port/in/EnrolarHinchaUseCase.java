@@ -32,6 +32,8 @@ public interface EnrolarHinchaUseCase {
 
     HuellaBiometrica registrarHuella(Long usuarioId, String tenantId, String credentialId, String publicKeyRaw, String dispositivoTipo, String dedoIndice);
 
+    boolean eliminarHuella(Long huellaId, Long usuarioId, String tenantId, boolean isSuperAdmin);
+
     List<HuellaBiometrica> listarHuellasUsuario(Long usuarioId);
 
     Consentimiento obtenerConsentimientoUsuario(Long usuarioId);
