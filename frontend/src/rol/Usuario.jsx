@@ -1,25 +1,239 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
-  ShieldCheck,
+  CircleCheck,
+  CircleAlert,
+  TriangleAlert,
+  RefreshCw,
   ScanFace,
   Fingerprint,
+  History,
   FileCheck2,
   Scale,
-  History,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  ArrowRight,
-  Lock,
-  Loader2,
-  Sparkles,
-  ExternalLink,
+  UserRound,
+  ChevronDown,
+  MapPin,
+  Send,
+  Inbox,
+  Code2,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
-import BiometricCamera from '../componente/BiometricCamera';
-import FingerprintCapture from '../componente/FingerprintCapture';
+import EnrolamientoHincha from '../registro/EnrolamientoHincha';
+import { enmascararDocumento, enmascararCorreo, enmascararCelular } from '../registro/formato';
+import { Alerta, Badge, Boton, Contenedor, Desplegable, EstadoVacio, Esqueleto, Tarjeta } from '../componente/ui';
 
-export default function Usuario({ currentUser, onOpenTerms }) {
+/* ---------- Textos y formato ---------- */
+
+const DEDOS = {
+  INDICE_DERECHO: 'Índice derecho',
+  INDICE_IZQUIERDO: 'Índice izquierdo',
+  PULGAR_DERECHO: 'Pulgar derecho',
+  PULGAR_IZQUIERDO: 'Pulgar izquierdo',
+  MEDIO_DERECHO: 'Medio derecho',
+  MEDIO_IZQUIERDO: 'Medio izquierdo',
+};
+
+const DERECHOS = {
+  ACCESO: { titulo: 'Ver mis datos', detalle: 'Recibe una copia de los datos que tenemos sobre ti.' },
+  RECTIFICACION: { titulo: 'Corregir mis datos', detalle: 'Si algún dato está mal o cambió.' },
+  CANCELACION: { titulo: 'Borrar mis datos', detalle: 'Eliminamos tu registro en un máximo de 60 días.' },
+  OPOSICION: { titulo: 'Oponerme a un uso', detalle: 'Si no estás de acuerdo con cómo usamos tus datos.' },
+  PORTABILIDAD: { titulo: 'Llevarme mis datos', detalle: 'Recibe tus datos en un formato para usarlos en otro servicio.' },
+};
+
+const ESTADOS_ARCO = {
+  PENDIENTE: { texto: 'En revisión', tono: 'aviso' },
+  EN_PROCESO: { texto: 'En revisión', tono: 'aviso' },
+  RESPONDIDA: { texto: 'Respondida', tono: 'ok' },
+  RESUELTA: { texto: 'Respondida', tono: 'ok' },
+  COMPLETADA: { texto: 'Respondida', tono: 'ok' },
+  RECHAZADA: { texto: 'Rechazada', tono: 'error' },
+};
+
+const aFecha = (v) => {
+  if (!v) return null;
+  if (Array.isArray(v)) {
+    const [a, m = 1, d = 1, h = 0, mi = 0] = v;
+    return new Date(a, m - 1, d, h, mi);
+  }
+  const f = new Date(v);
+  return Number.isNaN(f.getTime()) ? null : f;
+};
+
+const formatearFecha = (v, conHora = false) => {
+  const f = aFecha(v);
+  if (!f) return '';
+  return f.toLocaleString('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    ...(conHora ? { hour: '2-digit', minute: '2-digit' } : {}),
+  });
+};
+
+const capitalizar = (t = '') => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase().replace(/_/g, ' ');
+
+/* ---------- Hook: ¿pantalla de celular? ---------- */
+
+function useEsCelular() {
+  const consulta = '(max-width: 767px)';
+  const [es, setEs] = useState(() => typeof window !== 'undefined' && window.matchMedia(consulta).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(consulta);
+    const alCambiar = () => setEs(mq.matches);
+    mq.addEventListener('change', alCambiar);
+    return () => mq.removeEventListener('change', alCambiar);
+  }, []);
+  return es;
+}
+
+/* ---------- Secciones: pestañas en PC/tablet, acordeón en celular ---------- */
+
+function Secciones({ secciones, activa, onCambiar }) {
+  const esCelular = useEsCelular();
+  const base = useId();
+  const tabsRef = useRef([]);
+
+  if (esCelular) {
+    return (
+      <div className="space-y-3">
+        {secciones.map((s) => {
+          const abierta = activa === s.id;
+          const Icono = s.icono;
+          return (
+            <Tarjeta key={s.id} as="div" className="overflow-hidden">
+              <h2>
+                <button
+                  type="button"
+                  id={`${base}-b-${s.id}`}
+                  aria-expanded={abierta}
+                  aria-controls={`${base}-p-${s.id}`}
+                  onClick={() => onCambiar(abierta ? null : s.id)}
+                  className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left font-bold hover:bg-fondo"
+                >
+                  <Icono className="size-5 shrink-0 text-tinta-tenue" aria-hidden="true" />
+                  <span className="flex-1">{s.titulo}</span>
+                  {s.contador !== undefined && (
+                    <span className="rounded-full bg-sutil px-2 text-sm text-tinta-suave tabular-nums">{s.contador}</span>
+                  )}
+                  <ChevronDown
+                    className={`size-5 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${abierta ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </h2>
+              {abierta && (
+                <div
+                  id={`${base}-p-${s.id}`}
+                  role="region"
+                  aria-labelledby={`${base}-b-${s.id}`}
+                  className="border-t border-linea px-4 py-5"
+                >
+                  {s.contenido}
+                </div>
+              )}
+            </Tarjeta>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const indice = Math.max(0, secciones.findIndex((s) => s.id === activa));
+  const actual = secciones[indice];
+
+  const alTeclear = (e) => {
+    const mover = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    let destino = null;
+    if (mover) destino = (indice + mover + secciones.length) % secciones.length;
+    if (e.key === 'Home') destino = 0;
+    if (e.key === 'End') destino = secciones.length - 1;
+    if (destino === null) return;
+    e.preventDefault();
+    onCambiar(secciones[destino].id);
+    tabsRef.current[destino]?.focus();
+  };
+
+  return (
+    <Tarjeta as="div">
+      <div
+        role="tablist"
+        aria-label="Secciones de tu cuenta"
+        onKeyDown={alTeclear}
+        className="flex gap-1 overflow-x-auto border-b border-linea px-2 [scrollbar-width:thin]"
+      >
+        {secciones.map((s, i) => {
+          const sel = i === indice;
+          const Icono = s.icono;
+          return (
+            <button
+              key={s.id}
+              ref={(el) => (tabsRef.current[i] = el)}
+              type="button"
+              role="tab"
+              id={`${base}-t-${s.id}`}
+              aria-selected={sel}
+              aria-controls={`${base}-p-${s.id}`}
+              tabIndex={sel ? 0 : -1}
+              onClick={() => onCambiar(s.id)}
+              className={`relative flex min-h-14 shrink-0 items-center gap-2 whitespace-nowrap px-2.5 font-bold transition-colors ${
+                sel ? 'text-marca-700' : 'text-tinta-tenue hover:text-tinta'
+              }`}
+            >
+              <Icono className="hidden size-5 2xl:block" aria-hidden="true" />
+              {s.corto || s.titulo}
+              {s.contador !== undefined && (
+                <span className={`rounded-full px-2 text-sm tabular-nums ${sel ? 'bg-marca-50' : 'bg-sutil'}`}>{s.contador}</span>
+              )}
+              {sel && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-marca-700" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${base}-p-${actual.id}`}
+        aria-labelledby={`${base}-t-${actual.id}`}
+        tabIndex={0}
+        className="p-5 sm:p-6 lg:p-8"
+      >
+        <h2 className="sr-only">{actual.titulo}</h2>
+        {actual.contenido}
+      </div>
+    </Tarjeta>
+  );
+}
+
+/* ---------- Piezas ---------- */
+
+function Dato({ etiqueta, children }) {
+  return (
+    <div className="py-3.5 sm:grid sm:grid-cols-[12rem_1fr] sm:gap-4">
+      <dt className="text-[0.9375rem] text-tinta-tenue">{etiqueta}</dt>
+      <dd className="mt-0.5 break-words font-bold tabular-nums sm:mt-0">{children || '—'}</dd>
+    </div>
+  );
+}
+
+function CargandoPanel() {
+  return (
+    <Contenedor className="py-8 lg:py-10" >
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">Cargando tu cuenta…</span>
+        <Esqueleto className="h-40 w-full rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Esqueleto className="h-24" />
+          <Esqueleto className="h-24" />
+          <Esqueleto className="h-24" />
+        </div>
+        <Esqueleto className="h-64 w-full rounded-2xl" />
+      </div>
+    </Contenedor>
+  );
+}
+
+/* ---------- Panel ---------- */
+
+export default function Usuario({ currentUser, onOpenTerms, onLogout }) {
   const [portal, setPortal] = useState({
     usuario: currentUser,
     hincha: null,
@@ -28,45 +242,17 @@ export default function Usuario({ currentUser, onOpenTerms }) {
     historialAccesos: [],
     solicitudesArco: [],
   });
-  const [activeTab, setActiveTab] = useState('credencial');
+  const [activeTab, setActiveTab] = useState('datos');
   const [loading, setLoading] = useState(true);
+  const [cargaInicial, setCargaInicial] = useState(true);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [enviandoArco, setEnviandoArco] = useState(false);
 
-  // Estados del Flujo de Enrolamiento Paso a Paso (cuando hincha es null o quiere actualizar)
-  const [onboardingStep, setOnboardingStep] = useState(1); // 1: Terminos, 2: Captura, 3: Verificando, 4: Exito
-  const [verificationProgress, setVerificationProgress] = useState(0);
-  const [verificationCheckpoints, setVerificationCheckpoints] = useState([
-    { label: 'Cotejando Cédula y datos identificatorios...', done: false },
-    { label: 'Analizando prueba de vida y calidad de vector biométrico...', done: false },
-    { label: 'Consultando antecedentes de Derecho de Admisión (Ley N° 19.327)...', done: false },
-    { label: 'Generando token biométrico cifrado con AES-256-GCM...', done: false },
-  ]);
-
-  // Formulario Biométrico
-  const [bioForm, setBioForm] = useState({
-    tipoDocumento: 'CEDULA_CHILE',
-    numeroDocumento: currentUser?.rutDecrypted || '',
-    telefono: currentUser?.telefonoDecrypted || '',
-    nombres: currentUser?.nombreCompleto?.split(' ')[0] || '',
-    apellidos: currentUser?.nombreCompleto?.split(' ').slice(1).join(' ') || '',
-    fechaNacimiento: '1996-05-15',
-    nacionalidad: 'Chilena',
-    aceptaTerminosGenerales: false,
-    aceptaTratamientoBiometrico: false,
-    fotoDocumentoBase64: '',
-    selfieBase64: '',
-    descriptorFacialJson: '',
-    huellaCredentialId: '',
-    huellaPublicKey: '',
-    huellaDispositivoTipo: '',
-    huellaDedo: 'INDICE_DERECHO',
-  });
-
-  // Soporte para agregar múltiples huellas (dedos alternativos)
-  const [showAddHuella, setShowAddHuella] = useState(false);
-  const [nuevaHuellaDedo, setNuevaHuellaDedo] = useState('INDICE_IZQUIERDO');
-  const [huellaSaving, setHuellaSaving] = useState(false);
+  // Las huellas se registran en un punto de enrolamiento. Esta lógica queda
+  // disponible por si se vuelve a habilitar el registro desde el dispositivo.
+  const [nuevaHuellaDedo] = useState('INDICE_IZQUIERDO');
+  const [, setHuellaSaving] = useState(false);
 
   // Form Derechos ARCO (Ley 19.628)
   const [arcoForm, setArcoForm] = useState({
@@ -76,28 +262,19 @@ export default function Usuario({ currentUser, onOpenTerms }) {
 
   const cargarPortal = async () => {
     setLoading(true);
+    setErr('');
     try {
       const data = await apiFetch('/api/hincha/perfil');
       setPortal(data);
-      if (data.hincha && data.hincha.estadoEnrolamiento === 'COMPLETADO') {
-        setOnboardingStep(4);
-      }
-      if (data.usuario) {
-        setBioForm((prev) => ({
-          ...prev,
-          numeroDocumento: prev.numeroDocumento || data.usuario.rutDecrypted || '',
-          telefono: prev.telefono || data.usuario.telefonoDecrypted || '',
-          nombres: prev.nombres || data.usuario.nombreCompleto?.split(' ')[0] || '',
-          apellidos: prev.apellidos || data.usuario.nombreCompleto?.split(' ').slice(1).join(' ') || '',
-        }));
-      }
     } catch (e) {
       setErr(e.message);
     } finally {
       setLoading(false);
+      setCargaInicial(false);
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleGuardarNuevaHuella = async (fp) => {
     setHuellaSaving(true);
     setErr('');
@@ -111,8 +288,7 @@ export default function Usuario({ currentUser, onOpenTerms }) {
           dedoIndice: nuevaHuellaDedo,
         }),
       });
-      setMsg(`✓ Huella para ${nuevaHuellaDedo.replace('_', ' ')} registrada y cifrada con éxito.`);
-      setShowAddHuella(false);
+      setMsg('Huella agregada.');
       cargarPortal();
     } catch (e) {
       setErr(e.message);
@@ -125,863 +301,443 @@ export default function Usuario({ currentUser, onOpenTerms }) {
     cargarPortal();
   }, []);
 
-  // Animación del Paso 3: "Estamos Verificando sus Datos..."
-  const iniciarVerificacionEnTiempoReal = async () => {
-    setOnboardingStep(3);
-    setVerificationProgress(15);
-    setErr('');
-
-    // Checkpoint 1: Cotejo de identidad
-    setTimeout(() => {
-      setVerificationProgress(40);
-      setVerificationCheckpoints((prev) => [
-        { ...prev[0], done: true },
-        prev[1],
-        prev[2],
-        prev[3],
-      ]);
-    }, 700);
-
-    // Checkpoint 2: Prueba de vida y vector
-    setTimeout(() => {
-      setVerificationProgress(70);
-      setVerificationCheckpoints((prev) => [
-        prev[0],
-        { ...prev[1], done: true },
-        prev[2],
-        prev[3],
-      ]);
-    }, 1500);
-
-    // Checkpoint 3: Derecho de admisión
-    setTimeout(() => {
-      setVerificationProgress(90);
-      setVerificationCheckpoints((prev) => [
-        prev[0],
-        prev[1],
-        { ...prev[2], done: true },
-        prev[3],
-      ]);
-    }, 2200);
-
-    // Checkpoint 4: Guardar en backend y cifrar AES-256-GCM
-    setTimeout(async () => {
-      try {
-        await apiFetch('/api/hincha/biometria', {
-          method: 'POST',
-          body: JSON.stringify(bioForm),
-        });
-
-        if (bioForm.huellaCredentialId) {
-          await apiFetch('/api/hincha/huella', {
-            method: 'POST',
-            body: JSON.stringify({
-              credentialId: bioForm.huellaCredentialId,
-              publicKey: bioForm.huellaPublicKey,
-              dispositivoTipo: bioForm.huellaDispositivoTipo,
-              dedoIndice: bioForm.huellaDedo,
-            }),
-          });
-        }
-
-        setVerificationProgress(100);
-        setVerificationCheckpoints((prev) => [
-          prev[0],
-          prev[1],
-          prev[2],
-          { ...prev[3], done: true },
-        ]);
-
-        setTimeout(() => {
-          setOnboardingStep(4);
-          setMsg('¡Identidad y Biometría verificadas exitosamente en el RNH! Tu credencial ha sido activada.');
-          cargarPortal();
-        }, 600);
-      } catch (e) {
-        setErr(e.message);
-        setOnboardingStep(2);
-      }
-    }, 2800);
-  };
-
   const handleEnviarArco = async (e) => {
     e.preventDefault();
     setErr('');
     setMsg('');
+    setEnviandoArco(true);
     try {
       await apiFetch('/api/hincha/arco', {
         method: 'POST',
         body: JSON.stringify(arcoForm),
       });
-      setMsg('Solicitud de Derecho ARCO enviada al DPO ANFP (ifierro@anfpchile.cl) conforme al Art. 12 Ley 19.628.');
+      setMsg('Recibimos tu solicitud. La revisará el encargado de protección de datos de la ANFP y te responderá por correo.');
       setArcoForm({ tipoDerecho: 'ACCESO', fundamento: '' });
       cargarPortal();
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setEnviandoArco(false);
     }
   };
 
   const hincha = portal.hincha;
   const isEnrolled = hincha && hincha.estadoEnrolamiento === 'COMPLETADO';
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Alertas */}
-      {msg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {msg}
+  if (cargaInicial) return <CargandoPanel />;
+
+  if (!isEnrolled && !err) {
+    return (
+      <EnrolamientoHincha
+        usuario={portal.usuario || currentUser}
+        onTerminado={cargarPortal}
+        onOpenTerms={onOpenTerms}
+        onCerrar={onLogout}
+      />
+    );
+  }
+
+  // No se pudo cargar la cuenta: explicamos qué hacer.
+  if (!isEnrolled) {
+    return (
+      <Contenedor className="py-12">
+        <Tarjeta className="mx-auto max-w-lg p-6 text-center sm:p-8">
+          <span className="mx-auto grid size-14 place-items-center rounded-full bg-error-50 text-error-700" aria-hidden="true">
+            <CircleAlert className="size-8" />
           </span>
-          <button onClick={() => setMsg('')} className="font-bold text-emerald-700">✕</button>
+          <h1 className="mt-4 text-titulo-3 font-bold">No pudimos cargar tu cuenta</h1>
+          <p className="mt-2 text-tinta-tenue">
+            Puede ser la señal. Revisa tu conexión a internet y vuelve a intentar.
+          </p>
+          <p className="mt-1 text-sm text-tinta-apagada">Detalle: {err}</p>
+          <Boton tamano="lg" ancho className="mt-6" cargando={loading} onClick={cargarPortal} icono={<RefreshCw className="size-5" aria-hidden="true" />}>
+            Intentar de nuevo
+          </Boton>
+        </Tarjeta>
+      </Contenedor>
+    );
+  }
+
+  const usuario = portal.usuario || currentUser;
+  const documento = hincha?.documentoDecrypted || usuario?.rutDecrypted || '';
+  const ultimoIngreso = [...portal.historialAccesos].sort(
+    (a, b) => (aFecha(b.fechaEvento)?.getTime() || 0) - (aFecha(a.fechaEvento)?.getTime() || 0)
+  )[0];
+
+  // Estado principal: uno solo, con qué hacer.
+  const estado = hincha.tieneProhibicionActiva
+    ? {
+        tono: 'error',
+        icono: CircleAlert,
+        titulo: 'No puedes ingresar a estadios',
+        texto: 'Tienes una prohibición de ingreso vigente. Si crees que es un error, escribe a marketing@anfpchile.cl.',
+      }
+    : !hincha.livenessPassed
+      ? {
+          tono: 'aviso',
+          icono: TriangleAlert,
+          titulo: 'Falta verificar la foto de tu cara',
+          texto: 'Actualiza en unos minutos. Si no cambia, escribe a marketing@anfpchile.cl.',
+        }
+      : {
+          tono: 'ok',
+          icono: CircleCheck,
+          titulo: 'Listo para ingresar al estadio',
+          texto: 'En la entrada, mira a la cámara o muestra tu cédula.',
+        };
+
+  const COLORES_ESTADO = {
+    ok: { caja: 'border-ok-200', icono: 'bg-ok-50 text-ok-700' },
+    aviso: { caja: 'border-aviso-200', icono: 'bg-aviso-50 text-aviso-700' },
+    error: { caja: 'border-error-200', icono: 'bg-error-50 text-error-700' },
+  }[estado.tono];
+  const IconoEstado = estado.icono;
+
+  const resumen = [
+    {
+      etiqueta: 'Estadio principal',
+      valor: usuario?.tenantNombre || 'ANFP',
+      icono: MapPin,
+    },
+    {
+      etiqueta: 'Huellas registradas',
+      valor: portal.huellas.length === 0 ? 'Ninguna' : portal.huellas.length,
+      icono: Fingerprint,
+      ir: 'huellas',
+    },
+    {
+      etiqueta: 'Último ingreso',
+      valor: ultimoIngreso ? formatearFecha(ultimoIngreso.fechaEvento) || ultimoIngreso.puertaAcceso : 'Aún no registras',
+      icono: History,
+      ir: 'historial',
+    },
+  ];
+
+  const secciones = [
+    {
+      id: 'datos',
+      titulo: 'Mis datos',
+      icono: UserRound,
+      contenido: (
+        <div>
+          <p className="text-tinta-tenue">Ocultamos parte de tus datos por seguridad.</p>
+          <dl className="mt-3 divide-y divide-linea border-y border-linea">
+            <Dato etiqueta="Nombre">{usuario?.nombreCompleto}</Dato>
+            <Dato etiqueta="RUT o pasaporte">{enmascararDocumento(documento)}</Dato>
+            <Dato etiqueta="Correo">{enmascararCorreo(usuario?.email || '')}</Dato>
+            {usuario?.telefonoDecrypted && <Dato etiqueta="Celular">{enmascararCelular(usuario.telefonoDecrypted)}</Dato>}
+            <Dato etiqueta="Estadio principal">{usuario?.tenantNombre}</Dato>
+          </dl>
+          <p className="mt-4 text-[0.9375rem] text-tinta-tenue">
+            ¿Algún dato está mal?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setArcoForm((f) => ({ ...f, tipoDerecho: 'RECTIFICACION' }));
+                setActiveTab('arco');
+              }}
+              className="min-h-11 font-bold text-marca-700 underline decoration-marca-200 hover:decoration-marca-700"
+            >
+              Pide corregirlo
+            </button>
+          </p>
         </div>
+      ),
+    },
+    {
+      id: 'huellas',
+      titulo: 'Huellas',
+      icono: Fingerprint,
+      contador: portal.huellas.length,
+      contenido: (
+        <div className="space-y-5">
+          <Alerta tono="info" titulo="Las huellas se registran en persona">
+            Se toman en un punto de enrolamiento del estadio, no desde el celular. Sirven de respaldo si la cámara de la
+            entrada no te reconoce. Si un dedo se lesiona, puedes entrar con otro.
+          </Alerta>
+          {portal.huellas.length === 0 ? (
+            <EstadoVacio icono={Fingerprint} titulo="Aún no tienes huellas registradas">
+              No es obligatorio. Puedes entrar al estadio solo con tu cara o tu cédula.
+            </EstadoVacio>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {portal.huellas.map((h) => (
+                <li key={h.id} className="flex items-center gap-3 rounded-xl border border-linea p-4">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-700" aria-hidden="true">
+                    <Fingerprint className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold">{DEDOS[h.dedoIndice] || capitalizar(h.dedoIndice || 'Huella')}</p>
+                    {h.createdAt && <p className="text-sm text-tinta-tenue">Desde el {formatearFecha(h.createdAt)}</p>}
+                  </div>
+                  {h.activo === false ? <Badge tono="neutro">Inactiva</Badge> : <Badge tono="ok">Activa</Badge>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'historial',
+      titulo: 'Historial de ingresos',
+      corto: 'Ingresos',
+      icono: History,
+      contador: portal.historialAccesos.length,
+      contenido:
+        portal.historialAccesos.length === 0 ? (
+          <EstadoVacio icono={History} titulo="Aún no registras ingresos">
+            Cuando entres a un estadio, aparecerá aquí con la fecha y la puerta.
+          </EstadoVacio>
+        ) : (
+          <ul className="divide-y divide-linea border-y border-linea">
+            {portal.historialAccesos.map((a) => {
+              const ok = a.resultado === 'AUTORIZADO';
+              return (
+                <li key={a.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="font-bold">
+                      {a.tenantNombre ? `${a.tenantNombre} · ` : ''}
+                      {a.puertaAcceso}
+                    </p>
+                    <p className="text-[0.9375rem] text-tinta-tenue">
+                      {[formatearFecha(a.fechaEvento, true), a.tipoOperacion && capitalizar(a.tipoOperacion)].filter(Boolean).join(' · ')}
+                    </p>
+                    {!ok && a.detalleMensaje && <p className="mt-1 text-[0.9375rem] text-error-800">{a.detalleMensaje}</p>}
+                  </div>
+                  <Badge tono={ok ? 'ok' : 'error'} className="self-start sm:self-auto">
+                    {ok ? 'Autorizado' : 'No autorizado'}
+                  </Badge>
+                </li>
+              );
+            })}
+          </ul>
+        ),
+    },
+    {
+      id: 'consentimiento',
+      titulo: 'Consentimiento',
+      icono: FileCheck2,
+      contenido: portal.consentimiento ? (
+        <div className="space-y-5">
+          <dl className="divide-y divide-linea border-y border-linea">
+            <Dato etiqueta="Términos aceptados">Versión {portal.consentimiento.versionTerminos}</Dato>
+            <Dato etiqueta="Uso de tu cara">Autorizado</Dato>
+            {portal.consentimiento.fechaAceptacion && (
+              <Dato etiqueta="Fecha">{formatearFecha(portal.consentimiento.fechaAceptacion)}</Dato>
+            )}
+          </dl>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Boton variante="secundario" onClick={onOpenTerms} icono={<FileCheck2 className="size-5" aria-hidden="true" />}>
+              Leer los términos
+            </Boton>
+          </div>
+          {portal.consentimiento.hashDocumentoLegal && (
+            <Desplegable titulo="Detalles técnicos" icono={Code2}>
+              <p>Huella digital del documento que aceptaste (sirve para comprobar que no ha cambiado):</p>
+              <p className="mt-2 break-all rounded-lg bg-fondo p-3 font-mono text-sm text-tinta-suave">
+                {portal.consentimiento.hashDocumentoLegal}
+              </p>
+            </Desplegable>
+          )}
+        </div>
+      ) : (
+        <EstadoVacio icono={FileCheck2} titulo="No encontramos tu consentimiento">
+          Actualiza la página. Si sigue sin aparecer, escribe a marketing@anfpchile.cl.
+        </EstadoVacio>
+      ),
+    },
+    {
+      id: 'arco',
+      titulo: 'Derechos ARCO',
+      icono: Scale,
+      contador: portal.solicitudesArco.length || undefined,
+      contenido: (
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+          <form onSubmit={handleEnviarArco} className="space-y-5">
+            <div>
+              <h3 className="text-lg font-bold">Haz una solicitud sobre tus datos</h3>
+              <p className="mt-1 text-[0.9375rem] text-tinta-tenue">
+                Es gratis. Lo revisa el encargado de protección de datos de la ANFP (Ley N° 19.628, art. 12).
+              </p>
+            </div>
+            <fieldset>
+              <legend className="mb-2 font-bold">¿Qué quieres hacer?</legend>
+              <div className="space-y-2">
+                {Object.entries(DERECHOS).map(([valor, d]) => {
+                  const sel = arcoForm.tipoDerecho === valor;
+                  return (
+                    <label
+                      key={valor}
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
+                        sel ? 'border-marca-700 bg-marca-50 ring-1 ring-marca-700' : 'border-linea hover:border-linea-fuerte hover:bg-fondo'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="tipoDerecho"
+                        value={valor}
+                        checked={sel}
+                        onChange={() => setArcoForm({ ...arcoForm, tipoDerecho: valor })}
+                        className="mt-1 size-5 shrink-0 accent-marca-700"
+                      />
+                      <span>
+                        <span className="block font-bold">{d.titulo}</span>
+                        <span className="block text-[0.9375rem] text-tinta-tenue">{d.detalle}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div className="space-y-2">
+              <label htmlFor="arco-fundamento" className="block font-bold">
+                Cuéntanos el motivo
+              </label>
+              <textarea
+                id="arco-fundamento"
+                rows={4}
+                required
+                value={arcoForm.fundamento}
+                onChange={(e) => setArcoForm({ ...arcoForm, fundamento: e.target.value })}
+                placeholder="Por ejemplo: mi segundo apellido está mal escrito."
+                className="w-full rounded-xl border border-linea-fuerte bg-superficie px-4 py-3 text-campo outline-none transition-colors placeholder:text-tinta-apagada hover:border-tinta-apagada focus:border-marca-700 focus:ring-3 focus:ring-marca-700/15"
+              />
+            </div>
+            <Boton type="submit" tamano="lg" ancho cargando={enviandoArco} icono={<Send className="size-5" aria-hidden="true" />}>
+              {enviandoArco ? 'Enviando…' : 'Enviar solicitud'}
+            </Boton>
+          </form>
+
+          <div>
+            <h3 className="text-lg font-bold">Mis solicitudes</h3>
+            {portal.solicitudesArco.length === 0 ? (
+              <div className="mt-3">
+                <EstadoVacio icono={Inbox} titulo="No has hecho solicitudes">
+                  Cuando envíes una, verás aquí su estado y la respuesta.
+                </EstadoVacio>
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {portal.solicitudesArco.map((s) => {
+                  const est = ESTADOS_ARCO[s.estado] || { texto: capitalizar(s.estado || 'En revisión'), tono: 'neutro' };
+                  return (
+                    <li key={s.id} className="rounded-xl border border-linea p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="font-bold">{DERECHOS[s.tipoDerecho]?.titulo || capitalizar(s.tipoDerecho)}</p>
+                        <Badge tono={est.tono}>{est.texto}</Badge>
+                      </div>
+                      {s.createdAt && <p className="text-sm text-tinta-tenue">Enviada el {formatearFecha(s.createdAt)}</p>}
+                      <p className="mt-2 text-[0.9375rem] text-tinta-suave">{s.fundamento}</p>
+                      {s.respuestaDpo && (
+                        <div className="mt-3 rounded-lg bg-fondo p-3 text-[0.9375rem]">
+                          <p className="font-bold">Respuesta</p>
+                          <p className="text-tinta-suave">{s.respuestaDpo}</p>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Contenedor className="space-y-6 py-6 sm:py-8 lg:py-10">
+      <h1 className="sr-only">Mi panel</h1>
+
+      {msg && (
+        <Alerta tono="ok" onCerrar={() => setMsg('')}>
+          {msg}
+        </Alerta>
       )}
       {err && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" /> {err}
-          </span>
-          <button onClick={() => setErr('')} className="font-bold text-red-700">✕</button>
-        </div>
+        <Alerta tono="error" titulo="Algo no funcionó" onCerrar={() => setErr('')}>
+          {err} Revisa tu conexión e intenta de nuevo.
+        </Alerta>
       )}
 
-      {/* CASO A: USUARIO NUEVO O PENDIENTE DE ENROLAMIENTO -> ASISTENTE PASO A PASO */}
-      {!isEnrolled && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-          {/* Header del Asistente */}
-          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-8 border-b border-slate-800">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  PROCESO OFICIAL DE ENROLAMIENTO BIOMÉTRICO (RNH)
-                </span>
-                <h1 className="text-2xl font-extrabold">
-                  ¡Hola, {portal.usuario?.nombreCompleto || 'Hincha'}! Completa tu Verificación
-                </h1>
-                <p className="text-xs text-slate-300 max-w-2xl">
-                  Para poder comprar entradas y acceder a los estadios del fútbol profesional chileno,
-                  la Ley N° 19.327 exige validar tu identidad y generar tu pase biométrico digital.
-                </p>
-              </div>
-
-              {/* Indicador de Pasos */}
-              <div className="flex items-center gap-2 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 self-start sm:self-auto text-xs font-bold">
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                  1. Términos
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 2 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                  2. Biometría
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 3 ? 'bg-amber-600 text-white animate-pulse' : 'text-slate-400'}`}>
-                  3. Verificación
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-3 py-1 rounded-xl ${onboardingStep === 4 ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>
-                  4. Habilitado
-                </span>
-              </div>
+      <div className="grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start xl:grid-cols-[24rem_minmax(0,1fr)]">
+        {/* Pase: estado principal + identidad */}
+        <Tarjeta className={`p-6 lg:sticky lg:top-24 ${COLORES_ESTADO.caja}`} aria-labelledby="estado-pase">
+          <div className="flex items-start gap-4 lg:flex-col">
+            <span className={`grid size-14 shrink-0 place-items-center rounded-full lg:size-16 ${COLORES_ESTADO.icono}`} aria-hidden="true">
+              <IconoEstado className="size-8 lg:size-9" />
+            </span>
+            <div>
+              <h2 id="estado-pase" className="text-titulo-3 font-bold leading-tight lg:text-titulo-2">
+                {estado.titulo}
+              </h2>
+              <p className="mt-1.5 text-[1.0625rem] leading-relaxed text-tinta-suave">{estado.texto}</p>
             </div>
           </div>
 
-          <div className="p-6 sm:p-8">
-            {/* ETAPA 1: DATOS DE IDENTIDAD, TÉRMINOS Y CONSENTIMIENTO BIOMÉTRICO */}
-            {onboardingStep === 1 && (
-              <div className="space-y-6 max-w-3xl mx-auto text-xs">
-                <div className="space-y-2">
-                  <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                    <Scale className="w-5 h-5 text-blue-600" />
-                    Paso 1: Datos de Identidad y Consentimiento Legal ANFP
-                  </h2>
-                  <p className="text-slate-600 leading-relaxed text-sm">
-                    {portal.usuario?.googleSub ? (
-                      <span className="inline-flex items-center gap-1.5 text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                        ✓ Autenticado con tu cuenta de Google ({portal.usuario?.email}). Tus nombres están precargados.
-                      </span>
-                    ) : (
-                      'Valida tus datos identificatorios para asociar tu cédula al Registro Nacional de Hinchas.'
-                    )}
-                  </p>
-                </div>
-
-                {/* Formulario de Cédula/Pasaporte y Teléfono */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    Completa tus Datos Identificatorios (Requerido por Ley N° 19.327)
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Tipo de Documento *
-                      </label>
-                      <select
-                        value={bioForm.tipoDocumento}
-                        onChange={(e) => setBioForm({ ...bioForm, tipoDocumento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white font-medium"
-                      >
-                        <option value="CEDULA_CHILE">Cédula de Identidad (RUT Chileno)</option>
-                        <option value="PASAPORTE">Pasaporte Extranjero</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Número de Documento (RUT o Pasaporte) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej: 18.543.210-K o Pasaporte"
-                        value={bioForm.numeroDocumento}
-                        onChange={(e) => setBioForm({ ...bioForm, numeroDocumento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Teléfono Móvil (Contacto Oficial) *
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="+56912345678"
-                        value={bioForm.telefono}
-                        onChange={(e) => setBioForm({ ...bioForm, telefono: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        Fecha de Nacimiento *
-                      </label>
-                      <input
-                        type="date"
-                        value={bioForm.fechaNacimiento}
-                        onChange={(e) => setBioForm({ ...bioForm, fechaNacimiento: e.target.value })}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
-                    <div className="font-bold text-blue-900 text-sm">Zero-Retention</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      El sistema <strong>no almacena tus fotos</strong>. Las imágenes se procesan en
-                      memoria para extraer un vector matemático cifrado y luego se descartan de inmediato.
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1">
-                    <div className="font-bold text-emerald-900 text-sm">Cifrado AES-256-GCM</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      Tus datos biométricos y Cédula viajan encriptados de extremo a extremo y se
-                      guardan en PostgreSQL en servidores ubicados en Chile (GCP).
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1">
-                    <div className="font-bold text-amber-900 text-sm">Derechos ARCO</div>
-                    <p className="text-slate-600 leading-relaxed">
-                      Puedes acceder, rectificar o cancelar tus datos gratuitamente en cualquier
-                      momento contactando al Delegado de Protección de Datos (DPO).
-                    </p>
-                  </div>
-                </div>
-
-                {/* Casillas de Consentimiento Obligatorias */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5">
-                  <div className="font-bold text-slate-800 text-sm">
-                    Aceptación Expresa Obligatoria (Cláusula Primera del RNH)
-                  </div>
-
-                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-white border border-slate-200 cursor-pointer shadow-sm hover:border-blue-400 transition">
-                    <input
-                      type="checkbox"
-                      checked={bioForm.aceptaTerminosGenerales}
-                      onChange={(e) =>
-                        setBioForm({ ...bioForm, aceptaTerminosGenerales: e.target.checked })
-                      }
-                      className="mt-0.5 w-4 h-4 accent-blue-600"
-                    />
-                    <span className="text-slate-700 leading-relaxed">
-                      He leído y <strong>Acepto los Términos y Condiciones Generales</strong> del
-                      Registro Nacional de Hinchas (RNH) regulados por la Asociación Nacional de Fútbol
-                      Profesional (ANFP).{' '}
-                      <button
-                        type="button"
-                        onClick={onOpenTerms}
-                        className="text-blue-600 font-bold underline inline-flex items-center gap-1"
-                      >
-                        Ver contrato legal completo <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-white border border-slate-200 cursor-pointer shadow-sm hover:border-emerald-400 transition">
-                    <input
-                      type="checkbox"
-                      checked={bioForm.aceptaTratamientoBiometrico}
-                      onChange={(e) =>
-                        setBioForm({ ...bioForm, aceptaTratamientoBiometrico: e.target.checked })
-                      }
-                      className="mt-0.5 w-4 h-4 accent-emerald-600"
-                    />
-                    <span className="text-slate-700 leading-relaxed">
-                      <strong>Acepto expresamente el uso de mis datos biométricos</strong> (rostro y
-                      huella digital) para la generación de vectores cifrados, validación en torniquetes
-                      de acceso a estadios y corroboración del Derecho de Admisión (Ley N° 19.327).
-                    </span>
-                  </label>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                  <span className="text-[11px] text-slate-500 text-center sm:text-left">
-                    {!bioForm.numeroDocumento?.trim()
-                      ? '⚠️ Ingresa tu Cédula de Identidad o Pasaporte para continuar'
-                      : !bioForm.telefono?.trim()
-                      ? '⚠️ Ingresa tu número de Teléfono Móvil'
-                      : !bioForm.aceptaTerminosGenerales || !bioForm.aceptaTratamientoBiometrico
-                      ? '⚠️ Debes marcar las dos casillas de aceptación de términos'
-                      : '✓ Datos y consentimientos listos para captura'}
-                  </span>
-
-                  <button
-                    type="button"
-                    disabled={
-                      !bioForm.numeroDocumento?.trim() ||
-                      !bioForm.telefono?.trim() ||
-                      !bioForm.aceptaTerminosGenerales ||
-                      !bioForm.aceptaTratamientoBiometrico
-                    }
-                    onClick={() => setOnboardingStep(2)}
-                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 transition"
-                  >
-                    Continuar a la Captura Biométrica
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ETAPA 2: CAPTURA FACIAL (LIVENESS) Y HUELLA DIGITAL */}
-            {onboardingStep === 2 && (
-              <div className="space-y-6 max-w-4xl mx-auto text-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                      <ScanFace className="w-5 h-5 text-blue-600" />
-                      Paso 2: Captura Biométrica Facial en Vivo y Huella Digital
-                    </h2>
-                    <p className="text-slate-500 text-sm">
-                      Sitúate frente a la cámara web o móvil para validar tu rostro con prueba de vida.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setOnboardingStep(1)}
-                    className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-                  >
-                    ← Volver a Términos
-                  </button>
-                </div>
-
-                {/* Cámara Biométrica */}
-                <BiometricCamera
-                  mode="ENROLL"
-                  onCaptureComplete={(cap) => {
-                    setBioForm((prev) => ({
-                      ...prev,
-                      selfieBase64: cap.selfieBase64,
-                      fotoDocumentoBase64: cap.fotoDocumentoBase64,
-                      descriptorFacialJson: cap.descriptorFacialJson,
-                    }));
-                  }}
-                />
-
-                {/* Huella Digital */}
-                <FingerprintCapture
-                  onFingerprintCaptured={(fp) => {
-                    setBioForm((prev) => ({
-                      ...prev,
-                      huellaCredentialId: fp.credentialId,
-                      huellaPublicKey: fp.publicKey,
-                      huellaDispositivoTipo: fp.dispositivoTipo,
-                      huellaDedo: fp.dedoIndice,
-                    }));
-                  }}
-                />
-
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="text-slate-500">
-                    {bioForm.descriptorFacialJson ? (
-                      <span className="text-emerald-600 font-bold flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" /> Vector biométrico facial listo para cotejo
-                      </span>
-                    ) : (
-                      <span className="text-amber-600 font-semibold">
-                        Captura tu rostro en vivo o presiona "Generar Vector Asistido" para continuar.
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!bioForm.descriptorFacialJson && !bioForm.selfieBase64}
-                    onClick={iniciarVerificacionEnTiempoReal}
-                    className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-xl flex items-center gap-2 transition"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Iniciar Verificación de Identidad con la ANFP
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ETAPA 3: "ESTAMOS VERIFICANDO SUS DATOS..." (PANTALLA DE PROCESAMIENTO ACTIVO) */}
-            {onboardingStep === 3 && (
-              <div className="py-14 max-w-xl mx-auto text-center space-y-8">
-                <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full border-4 border-blue-200 animate-ping opacity-30" />
-                  <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-2xl">
-                    <Loader2 className="w-10 h-10 animate-spin" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold uppercase tracking-wider">
-                    En Tiempo Real
-                  </span>
-                  <h2 className="text-2xl font-extrabold text-slate-900">
-                    Estamos verificando tu identidad...
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto">
-                    Por favor espera unos segundos mientras nos comunicamos con los servidores
-                    oficiales de la ANFP y verificamos tus antecedentes en el Registro Nacional de Hinchas.
-                  </p>
-                </div>
-
-                {/* Barra de Progreso */}
-                <div className="space-y-2">
-                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
-                    <div
-                      className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full transition-all duration-500 ease-out"
-                      style={{ width: `${verificationProgress}%` }}
-                    />
-                  </div>
-                  <div className="text-right text-xs font-mono font-bold text-slate-500">
-                    {verificationProgress}%
-                  </div>
-                </div>
-
-                {/* Checkpoints Animados */}
-                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left space-y-3 text-xs">
-                  {verificationCheckpoints.map((cp, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <span className={cp.done ? 'text-slate-900 font-bold' : 'text-slate-400'}>
-                        {cp.label}
-                      </span>
-                      {cp.done ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* CASO B: USUARIO YA VERIFICADO Y ENROLADO (CREDENCIAL DIGITAL ACTIVA) */}
-      {isEnrolled && (
-        <>
-          {/* Banner Credencial Digital RNH */}
-          <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-800 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-            <div className="lg:col-span-8 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-4 h-4" />
-                  IDENTIDAD BIOMÉTRICA VERIFICADA • CREDENCIAL RNH ACTIVA
-                </span>
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold">
-                  Recinto: {portal.usuario?.tenantNombre || 'ANFP Central'}
-                </span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl font-extrabold">
-                {portal.usuario?.nombreCompleto}
-              </h1>
-              <p className="text-xs text-slate-300">
-                Email: {portal.usuario?.email} • Cédula Cifrada (AES-256-GCM):{' '}
-                <span className="font-mono font-bold text-white">
-                  {hincha?.documentoDecrypted || portal.usuario?.rutDecrypted}
-                </span>
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Estado RNH</div>
-                  <div className="text-xs font-extrabold text-emerald-400 mt-0.5">
-                    {hincha.estadoEnrolamiento}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Token Biométrico</div>
-                  <div className="text-xs font-mono font-bold text-blue-300 mt-0.5 truncate">
-                    {hincha.biometricTokenRef}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Prueba de Vida</div>
-                  <div className="text-xs font-bold text-white mt-0.5">
-                    {hincha.livenessPassed
-                      ? `Verificada (${(hincha.livenessScore * 100).toFixed(1)}%)`
-                      : 'Pendiente'}
-                  </div>
-                </div>
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Derecho Admisión</div>
-                  <div
-                    className={`text-xs font-extrabold mt-0.5 ${
-                      hincha.tieneProhibicionActiva ? 'text-red-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    {hincha.tieneProhibicionActiva ? 'BLOQUEADO (LEY 19.327)' : 'HABILITADO PARA ESTADIOS'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Digital Pass Card */}
-            <div className="lg:col-span-4 bg-slate-950/90 rounded-2xl p-5 border border-slate-800 text-center space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Pase Oficial Fútbol Chileno
-              </div>
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-500 to-blue-600 flex items-center justify-center shadow-lg">
-                <ScanFace className="w-14 h-14 text-white" />
-              </div>
-              <div className="text-xs font-bold text-emerald-400">
-                Vector Facial + Huella Vinculados
-              </div>
-              <button
-                onClick={cargarPortal}
-                className="text-[11px] text-slate-400 hover:text-white inline-flex items-center gap-1"
-              >
-                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Sincronizar Estado
-              </button>
-            </div>
+          <div className="mt-6 border-t border-linea pt-5">
+            <p className="text-lg font-bold break-words">{usuario?.nombreCompleto}</p>
+            <p className="mt-0.5 text-tinta-tenue tabular-nums">{enmascararDocumento(documento)}</p>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-            <button
-              onClick={() => setActiveTab('credencial')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'credencial'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <FileCheck2 className="w-4 h-4" />
-              Mi Consentimiento y Estado Legal
-            </button>
-
-            <button
-              onClick={() => setActiveTab('historial')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'historial'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              Historial de Ingresos al Estadio ({portal.historialAccesos.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('huella')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'huella'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <Fingerprint className="w-4 h-4" />
-              Mis Huellas Digitales ({portal.huellas.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('arco')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-                activeTab === 'arco'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-slate-700 border border-slate-200'
-              }`}
-            >
-              <Scale className="w-4 h-4" />
-              Derechos ARCO (Ley N° 19.628)
-            </button>
-          </div>
-
-          {/* TAB 1: CERTIFICADO DE CONSENTIMIENTO */}
-          {activeTab === 'credencial' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Certificado de Consentimiento Informado y Protección de Datos (ANFP)
-                </h3>
-                <button
-                  onClick={onOpenTerms}
-                  className="text-xs font-bold text-blue-600 hover:underline"
-                >
-                  Ver Texto Completo de Términos y Condiciones
-                </button>
-              </div>
-
-              {portal.consentimiento ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Versión Términos Aceptada:</span>
-                    <span className="font-bold text-slate-900">
-                      {portal.consentimiento.versionTerminos}
-                    </span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Consentimiento Biométrico Expreso:</span>
-                    <span className="font-bold text-emerald-700">
-                      ACEPTADO (Art. 2.g Ley N° 19.628)
-                    </span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-400 block">Firma Hash de Integridad Legal:</span>
-                    <span className="font-mono text-[11px] text-slate-700 break-all">
-                      {portal.consentimiento.hashDocumentoLegal}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+          {estado.tono === 'ok' && (
+            <p className="mt-5 flex items-center gap-2.5 rounded-xl bg-marca-50 px-3.5 py-3 font-bold text-marca-900">
+              <ScanFace className="size-6 shrink-0" aria-hidden="true" />
+              Tu cara es tu entrada
+            </p>
           )}
 
-          {/* TAB 2: HISTORIAL DE INGRESOS */}
-          {activeTab === 'historial' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-base font-extrabold text-slate-900">
-                Mis Verificaciones en Puertas de Estadio y Ticketeras
-              </h3>
-              {portal.historialAccesos.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  Aún no registras ingresos en puertas de estadio.
-                </p>
-              ) : (
-                <div className="space-y-2 text-xs">
-                  {portal.historialAccesos.map((a) => (
-                    <div
-                      key={a.id}
-                      className="p-3.5 rounded-xl border border-slate-200 flex items-center justify-between"
+          <Boton
+            variante="texto"
+            tamano="sm"
+            className="-ml-3 mt-4"
+            onClick={cargarPortal}
+            disabled={loading}
+            icono={<RefreshCw className={`size-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true" />}
+          >
+            {loading ? 'Actualizando…' : 'Actualizar'}
+          </Boton>
+        </Tarjeta>
+
+        <div className="min-w-0 space-y-6">
+          {/* Resumen en fila */}
+          {/* Celular: una lista compacta. Tablet y PC: tres tarjetas en fila. */}
+          <ul className="divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-superficie shadow-tarjeta sm:grid sm:grid-cols-3 sm:gap-3 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none">
+            {resumen.map((r) => {
+              const Icono = r.icono;
+              const contenido = (
+                <>
+                  <Icono className="size-5 shrink-0 text-tinta-tenue" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 sm:mt-3 sm:block">
+                    <span className="block text-[0.9375rem] text-tinta-tenue">{r.etiqueta}</span>
+                    <span className="mt-0.5 block font-bold break-words">{r.valor}</span>
+                  </span>
+                </>
+              );
+              const caja =
+                'flex h-full w-full items-center gap-3 px-4 py-3.5 text-left sm:block sm:rounded-2xl sm:border sm:border-linea sm:bg-superficie sm:p-4 sm:shadow-tarjeta';
+              return (
+                <li key={r.etiqueta}>
+                  {r.ir ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(r.ir)}
+                      className={`${caja} transition-colors hover:bg-fondo sm:hover:border-linea-fuerte`}
                     >
-                      <div>
-                        <div className="font-bold text-slate-900">
-                          {a.puertaAcceso} ({a.tipoOperacion})
-                        </div>
-                        <div className="text-slate-500">{a.detalleMensaje}</div>
-                      </div>
-                      <span
-                        className={`px-2.5 py-1 rounded-full font-bold ${
-                          a.resultado === 'AUTORIZADO'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {a.resultado}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 3: HUELLAS DIGITALES (MÚLTIPLES DEDOS REGISTRABLES) */}
-          {activeTab === 'huella' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                    <Fingerprint className="w-5 h-5 text-blue-600" />
-                    Mis Credenciales de Huella Digital Almacenadas ({portal.huellas.length})
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Puedes tener registrados <strong>múltiples dedos</strong> (índice derecho, izquierdo, pulgares). Si un dedo sufre una lesión, podrás ingresar con tus otros dedos en el torniquete.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddHuella(!showAddHuella)}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-md transition self-start sm:self-auto"
-                >
-                  <Fingerprint className="w-4 h-4" />
-                  {showAddHuella ? 'Cerrar Enrolador' : '+ Enrolar Otro Dedo'}
-                </button>
-              </div>
-
-              {/* SECCIÓN DESPLEGABLE: ENROLAR OTRA HUELLA */}
-              {showAddHuella && (
-                <div className="p-5 rounded-2xl bg-slate-50 border-2 border-blue-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      Registrar Nueva Huella Digital (FIDO2 / WebAuthn)
-                    </h4>
-                    <span className="text-[11px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-lg">
-                      Sensor FIDO2
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-700 text-xs mb-1">
-                        Selecciona el dedo a registrar:
-                      </label>
-                      <select
-                        value={nuevaHuellaDedo}
-                        onChange={(e) => setNuevaHuellaDedo(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 bg-white text-xs font-semibold"
-                      >
-                        <option value="INDICE_DERECHO">Índice Mano Derecha</option>
-                        <option value="INDICE_IZQUIERDO">Índice Mano Izquierda</option>
-                        <option value="PULGAR_DERECHO">Pulgar Mano Derecha</option>
-                        <option value="PULGAR_IZQUIERDO">Pulgar Mano Izquierda</option>
-                        <option value="MEDIO_DERECHO">Dedo Medio Mano Derecha</option>
-                        <option value="MEDIO_IZQUIERDO">Dedo Medio Mano Izquierda</option>
-                      </select>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 flex items-center">
-                      Presiona el botón de abajo y coloca tu dedo sobre el sensor de tu teléfono o lector biométrico FIDO2. La clave pública se encriptará con AES-256-GCM.
-                    </div>
-                  </div>
-
-                  <FingerprintCapture
-                    onFingerprintCaptured={(fp) => handleGuardarNuevaHuella(fp)}
-                  />
-                  {huellaSaving && (
-                    <div className="text-center text-xs text-blue-600 font-bold flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando y cifrando huella en PostgreSQL...
-                    </div>
+                      {contenido}
+                    </button>
+                  ) : (
+                    <div className={caja}>{contenido}</div>
                   )}
-                </div>
-              )}
+                </li>
+              );
+            })}
+          </ul>
 
-              {/* LISTA DE HUELLAS REGISTRADAS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {portal.huellas.length === 0 ? (
-                  <div className="col-span-2 text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    No tienes huellas registradas aún. Haz clic en "+ Enrolar Otro Dedo" para agregar una.
-                  </div>
-                ) : (
-                  portal.huellas.map((h) => (
-                    <div
-                      key={h.id}
-                      className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 shadow-sm hover:border-blue-300 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          {h.dedoIndice ? h.dedoIndice.replace('_', ' ') : 'HUELLA REGISTRADA'}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                          AES-256-GCM
-                        </span>
-                      </div>
-                      <div className="font-mono text-[11px] text-slate-600 truncate">
-                        ID: {h.credentialId}
-                      </div>
-                      <div className="text-slate-500 text-[11px] flex items-center justify-between">
-                        <span>Dispositivo: {h.dispositivoTipo}</span>
-                        <span className="text-emerald-700 font-bold">Activa para Acceso</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: DERECHOS ARCO */}
-          {activeTab === 'arco' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <form
-                onSubmit={handleEnviarArco}
-                className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 text-xs"
-              >
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Ejercer Derechos ARCO (Cláusula 5.7 • Art. 12 Ley N° 19.628)
-                </h3>
-                <p className="text-slate-500">
-                  Solicitud gratuita dirigida al Delegado de Protección de Datos (DPO) de la ANFP (
-                  <code className="text-blue-600">ifierro@anfpchile.cl</code>).
-                </p>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Derecho a Ejercer *</label>
-                  <select
-                    value={arcoForm.tipoDerecho}
-                    onChange={(e) => setArcoForm({ ...arcoForm, tipoDerecho: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  >
-                    <option value="ACCESO">Derecho de Acceso (Art. 12 Ley 19.628)</option>
-                    <option value="RECTIFICACION">Derecho de Rectificación de Datos</option>
-                    <option value="CANCELACION">Derecho de Cancelación / Eliminación (Máx. 60 días)</option>
-                    <option value="OPOSICION">Derecho de Oposición al Tratamiento</option>
-                    <option value="PORTABILIDAD">Derecho a la Portabilidad de Datos</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fundamento *</label>
-                  <textarea
-                    rows="3"
-                    required
-                    value={arcoForm.fundamento}
-                    onChange={(e) => setArcoForm({ ...arcoForm, fundamento: e.target.value })}
-                    placeholder="Describa el motivo de su solicitud..."
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow"
-                >
-                  Enviar Solicitud Formal al DPO
-                </button>
-              </form>
-
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3 text-xs">
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Mis Solicitudes ARCO Registradas ({portal.solicitudesArco.length})
-                </h3>
-                {portal.solicitudesArco.map((s) => (
-                  <div key={s.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="flex justify-between font-bold">
-                      <span>Derecho de {s.tipoDerecho}</span>
-                      <span className="text-indigo-600">{s.estado}</span>
-                    </div>
-                    <p className="text-slate-600">{s.fundamento}</p>
-                    <p className="text-[11px] text-emerald-700">{s.respuestaDpo}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+          <Secciones secciones={secciones} activa={activeTab} onCambiar={setActiveTab} />
+        </div>
+      </div>
+    </Contenedor>
   );
 }
