@@ -7,16 +7,27 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Base64;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 
 /**
  * Servicio Inteligente de Verificación y Cotejo Biométrico Forense con Google Gemini.
@@ -207,6 +218,248 @@ public class GeminiVerificationService {
         } catch (Exception e) {
             LOG.error("Error procesando validación con Gemini", e);
             throw new SecurityException("Error al procesar el cotejo biométrico: " + e.getMessage());
+        }
+    }
+
+    public record FaceMatchCandidate(
+            Long hinchaId,
+            String fotoRostroBase64
+    ) {}
+
+    public record FaceIdentificationResult(
+            boolean rostroValido,
+            boolean encontrado,
+            Long hinchaIdCoincidente,
+            double confianza,
+            String dictamen
+    ) {}
+
+    /**
+     * Identificación facial 1:N rápida contra las selfies registradas en base de datos usando Gemini Vision.
+     * Compacta las miniaturas en memoria a <= 280px para que el análisis sea ágil (~2-4 segundos).
+     */
+    public FaceIdentificationResult identificarRostroEnGaleria(
+            String selfieEnVivoBase64,
+            List<FaceMatchCandidate> candidatos
+    ) {
+        String apiKey = geminiApiKey.orElse("").trim();
+        if (apiKey.isBlank() || apiKey.startsWith("COLOCAR_")) {
+            throw new SecurityException("El servicio de reconocimiento facial no está configurado.");
+        }
+        if (selfieEnVivoBase64 == null || selfieEnVivoBase64.isBlank()) {
+            throw new SecurityException("Debe capturar una fotografía de su rostro.");
+        }
+
+        String probeCompacta = compactarImagenJpeg(selfieEnVivoBase64, 420, 0.78f);
+
+        // Si no hay hinchas registrados con rostro aún, validamos igual que la cámara haya captado una persona real
+        if (candidatos == null || candidatos.isEmpty()) {
+            return evaluarSinCandidatos(apiKey, probeCompacta);
+        }
+
+        final int BATCH_SIZE = 12;
+        for (int start = 0; start < candidatos.size(); start += BATCH_SIZE) {
+            List<FaceMatchCandidate> lote = candidatos.subList(start, Math.min(start + BATCH_SIZE, candidatos.size()));
+            FaceIdentificationResult res = ejecutarLoteIdentificacion(apiKey, probeCompacta, lote);
+            if (!res.rostroValido()) {
+                return res;
+            }
+            if (res.encontrado() && res.hinchaIdCoincidente() != null && res.confianza() >= 0.72) {
+                return res;
+            }
+        }
+
+        return new FaceIdentificationResult(
+                true,
+                false,
+                null,
+                0.0,
+                "No encontramos tus datos faciales registrados. Debes registrarte para ser hincha oficial del RNH."
+        );
+    }
+
+    private FaceIdentificationResult evaluarSinCandidatos(String apiKey, String probeCompacta) {
+        try {
+            List<Map<String, Object>> parts = List.of(
+                    Map.of("inline_data", Map.of("mime_type", "image/jpeg", "data", probeCompacta)),
+                    Map.of("text", "Analiza si en esta imagen aparece un rostro humano claro y frontal. Responde JSON: {\"rostroValido\": true/false, \"razon\": \"...\"}")
+            );
+            JsonNode data = invocarGeminiJson(apiKey, parts, 12);
+            boolean rostroValido = data.path("rostroValido").asBoolean(false);
+            if (!rostroValido) {
+                return new FaceIdentificationResult(false, false, null, 0.0, "No se detectó un rostro humano claro en la foto.");
+            }
+            return new FaceIdentificationResult(
+                    true,
+                    false,
+                    null,
+                    0.0,
+                    "Aún no hay registros faciales cargados. Debes registrarte para ser hincha oficial del RNH."
+            );
+        } catch (SecurityException se) {
+            throw se;
+        } catch (Exception e) {
+            LOG.warn("Error validando rostro sin candidatos", e);
+            throw new SecurityException("No se pudo analizar la fotografía facial en este momento.");
+        }
+    }
+
+    private FaceIdentificationResult ejecutarLoteIdentificacion(
+            String apiKey,
+            String probeCompacta,
+            List<FaceMatchCandidate> lote
+    ) {
+        try {
+            List<Map<String, Object>> parts = new ArrayList<>();
+            parts.add(Map.of("text", "FOTO_EN_VIVO (persona que consulta si está registrada):"));
+            parts.add(Map.of("inline_data", Map.of("mime_type", "image/jpeg", "data", probeCompacta)));
+
+            for (FaceMatchCandidate c : lote) {
+                if (c.fotoRostroBase64() == null || c.fotoRostroBase64().isBlank()) continue;
+                String candCompacta = compactarImagenJpeg(c.fotoRostroBase64(), 260, 0.72f);
+                parts.add(Map.of("text", "CANDIDATO_ID=" + c.hinchaId() + ":"));
+                parts.add(Map.of("inline_data", Map.of("mime_type", "image/jpeg", "data", candCompacta)));
+            }
+
+            String prompt =
+                    "Eres el motor biométrico de identificación facial 1:N del Registro Nacional de Hinchas (RNH).\n" +
+                    "1. Verifica primero si FOTO_EN_VIVO muestra claramente el rostro de una persona real. " +
+                    "Si FOTO_EN_VIVO es una pared, oscuridad, un objeto, o no tiene rostro visible, responde rostroValido=false, encontrado=false, confianza=0.0.\n" +
+                    "2. Si hay un rostro claro en FOTO_EN_VIVO, compáralo geométrica y biométricamente (ojos, nariz, boca, cejas, óvalo facial, pómulos) " +
+                    "contra cada imagen CANDIDATO_ID adjunta (tolerando cambios de luz, ángulo leve o expresión).\n" +
+                    "3. Responde encontrado=true y el candidatoId exacto ÚNICAMENTE si estás seguro (>= 0.72) de que es exactamente la MISMA persona. " +
+                    "Si es otra persona o no se parece lo suficiente, responde encontrado=false y candidatoId=null.\n\n" +
+                    "Devuelve ÚNICAMENTE este JSON:\n" +
+                    "{\n" +
+                    "  \"rostroValido\": true,\n" +
+                    "  \"encontrado\": true,\n" +
+                    "  \"candidatoId\": 12,\n" +
+                    "  \"confianza\": 0.93,\n" +
+                    "  \"razon\": \"...\"\n" +
+                    "}";
+
+            parts.add(Map.of("text", prompt));
+            JsonNode data = invocarGeminiJson(apiKey, parts, 18);
+
+            boolean rostroValido = data.path("rostroValido").asBoolean(false);
+            if (!rostroValido) {
+                String razon = data.path("razon").asText("No se detectó un rostro humano claro. Intenta con mejor luz frente a la cámara.");
+                return new FaceIdentificationResult(false, false, null, 0.0, razon);
+            }
+
+            boolean encontrado = data.path("encontrado").asBoolean(false);
+            double confianza = data.path("confianza").asDouble(0.0);
+            Long candId = data.hasNonNull("candidatoId") && data.path("candidatoId").isNumber()
+                    ? data.path("candidatoId").asLong()
+                    : null;
+
+            // Validar que el candidatoId realmente exista dentro del lote evaluado
+            if (encontrado && candId != null) {
+                final Long idBuscado = candId;
+                boolean existeEnLote = lote.stream().anyMatch(c -> idBuscado.equals(c.hinchaId()));
+                if (!existeEnLote) {
+                    encontrado = false;
+                    candId = null;
+                }
+            }
+
+            String razon = data.path("razon").asText(
+                    encontrado
+                            ? "Identidad facial confirmada en el Registro Nacional de Hinchas."
+                            : "No encontramos coincidencia facial en los registros."
+            );
+
+            return new FaceIdentificationResult(true, encontrado && candId != null && confianza >= 0.72, candId, confianza, razon);
+
+        } catch (SecurityException se) {
+            throw se;
+        } catch (java.net.http.HttpTimeoutException te) {
+            LOG.warn("Timeout en identificación facial 1:N con Gemini", te);
+            throw new SecurityException("La verificación tardó demasiado por señal de internet. Intenta nuevamente.");
+        } catch (Exception e) {
+            LOG.error("Error ejecutando identificación facial 1:N", e);
+            throw new SecurityException("Error analizando datos faciales: " + e.getMessage());
+        }
+    }
+
+    private JsonNode invocarGeminiJson(String apiKey, List<Map<String, Object>> parts, int timeoutSeconds) throws Exception {
+        Map<String, Object> requestBody = Map.of(
+                "contents", List.of(Map.of("parts", parts)),
+                "generationConfig", Map.of(
+                        "response_mime_type", "application/json",
+                        "temperature", 0.1
+                )
+        );
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel + ":generateContent?key=" + apiKey;
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            LOG.errorf("Error Gemini 1:N (HTTP %d): %s", response.statusCode(), response.body());
+            throw new SecurityException("Servicio biométrico temporalmente no disponible (HTTP " + response.statusCode() + ").");
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode candidates = root.path("candidates");
+        if (!candidates.isArray() || candidates.isEmpty()) {
+            throw new SecurityException("El análisis biométrico no devolvió respuesta.");
+        }
+        JsonNode firstParts = candidates.get(0).path("content").path("parts");
+        StringBuilder sb = new StringBuilder();
+        if (firstParts.isArray()) {
+            for (JsonNode p : firstParts) {
+                if (p.has("text")) sb.append(p.path("text").asText());
+            }
+        }
+        return objectMapper.readTree(extraerJsonDeTexto(sb.toString()));
+    }
+
+    private String compactarImagenJpeg(String base64Raw, int maxWidth, float quality) {
+        String clean = limpiarBase64(base64Raw);
+        try {
+            byte[] decoded = Base64.getDecoder().decode(clean);
+            BufferedImage original = ImageIO.read(new ByteArrayInputStream(decoded));
+            if (original == null) {
+                return clean;
+            }
+            int w = original.getWidth();
+            int h = original.getHeight();
+            int targetW = w;
+            int targetH = h;
+            if (w > maxWidth && w > 0) {
+                targetW = maxWidth;
+                targetH = Math.max(1, (int) Math.round((double) h * maxWidth / w));
+            }
+            BufferedImage rgb = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = rgb.createGraphics();
+            g.drawImage(original.getScaledInstance(targetW, targetH, Image.SCALE_SMOOTH), 0, 0, null);
+            g.dispose();
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+            if (writers.hasNext()) {
+                ImageWriter writer = writers.next();
+                ImageWriteParam param = writer.getDefaultWriteParam();
+                if (param.canWriteCompressed()) {
+                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                    param.setCompressionQuality(quality);
+                }
+                try (ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                    writer.setOutput(ios);
+                    writer.write(null, new IIOImage(rgb, null, null), param);
+                }
+                writer.dispose();
+                return Base64.getEncoder().encodeToString(baos.toByteArray());
+            }
+            ImageIO.write(rgb, "jpeg", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        } catch (Exception e) {
+            return clean;
         }
     }
 

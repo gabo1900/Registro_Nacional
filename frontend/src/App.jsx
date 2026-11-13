@@ -5,6 +5,7 @@ import Navbar from './componente/Navbar';
 import Header from './componente/Header';
 import Footer from './componente/Footer';
 import TermsModal from './componente/TermsModal';
+import VerificacionRostroModal from './componente/VerificacionRostroModal';
 import GoogleAuthButton from './componente/GoogleAuthButton';
 import { Alerta, Boton, Contenedor, Desplegable, Tarjeta } from './componente/ui';
 
@@ -44,6 +45,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeScreen, setActiveScreen] = useState('landing'); // landing, login, register, panel
   const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [verificacionFacialOpen, setVerificacionFacialOpen] = useState(false);
   const [publicTenants, setPublicTenants] = useState([]);
 
   // Login State
@@ -167,7 +169,11 @@ export default function App() {
         {/* 1. INICIO */}
         {activeScreen === 'landing' && (
           <>
-            <Header onGoLogin={irLogin} onGoRegister={irRegistro} />
+            <Header
+              onGoLogin={irLogin}
+              onGoRegister={irRegistro}
+              onCheckFace={() => setVerificacionFacialOpen(true)}
+            />
 
             {/* Cómo funciona */}
             <section aria-labelledby="como-funciona" className="py-14 sm:py-20">
@@ -378,6 +384,13 @@ export default function App() {
       <Footer onOpenTerms={() => setTermsModalOpen(true)} />
 
       <TermsModal isOpen={termsModalOpen} onClose={() => setTermsModalOpen(false)} />
+
+      <VerificacionRostroModal
+        abierta={verificacionFacialOpen}
+        onCerrar={() => setVerificacionFacialOpen(false)}
+        onGoRegister={irRegistro}
+        onGoLogin={irLogin}
+      />
     </div>
   );
 }

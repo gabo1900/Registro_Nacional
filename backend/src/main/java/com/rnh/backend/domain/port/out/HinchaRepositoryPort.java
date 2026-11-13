@@ -13,6 +13,7 @@ public interface HinchaRepositoryPort {
     Optional<Hincha> findByDocumentoHash(String documentoHash);
     Optional<Hincha> findById(Long id);
     List<Hincha> findByTenantId(String tenantId);
+    List<Hincha> findAllEnroladosConRostro();
     Hincha save(Hincha hincha, String vectorCifrado);
     Optional<String> findVectorCifradoByHinchaId(Long hinchaId);
 

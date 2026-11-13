@@ -172,30 +172,89 @@ export default function Administrador({ currentUser }) {
     }
   };
 
-  const handleBuscarHincha = async (rutABuscar) => {
+  const handleBuscarHincha = async (rutABuscar, limpiarMensajes = true) => {
     const rut = rutABuscar || buscarRutHincha;
     if (!rut) return;
-    setErrorMsg('');
+    if (limpiarMensajes) {
+      setErrorMsg('');
+      setSuccessMsg('');
+    }
     try {
       const resp = await apiFetch(`/api/tenant/hinchas/buscar?rut=${encodeURIComponent(rut.trim())}`);
       setHinchaEncontrado(resp);
+      // Ajustar dedo por defecto en Slot 2 para que no coincida con Slot 1
+      if (resp.huellas?.length === 1) {
+        const d1 = resp.huellas[0].dedoIndice;
+        setDedoSlot2(d1 === 'PULGAR_DERECHO' ? 'INDICE_DERECHO' : 'PULGAR_DERECHO');
+      }
       // Prellenar gateForm con este RUT
       setGateForm((prev) => ({ ...prev, documentoRut: resp.rutNormalizado || rut }));
     } catch (err) {
+      setSuccessMsg('');
       setErrorMsg(err.message || 'No se encontró hincha con ese RUT.');
       setHinchaEncontrado(null);
     }
   };
 
+  const handleEnrolarHuellaAfis = async (e, dedoParam = 'INDICE_DERECHO') => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!hinchaEncontrado?.hincha) {
+      setSuccessMsg('');
+      return setErrorMsg('Primero debes buscar un hincha por RUT para enrolarle la huella.');
+    }
+    if ((hinchaEncontrado.huellas || []).length >= 2) {
+      setSuccessMsg('');
+      return setErrorMsg('El hincha ya tiene el límite máximo de 2 huellas enroladas. Elimina una para registrar otra.');
+    }
+
+    setErrorMsg('');
+    setSuccessMsg('');
+    setEnrolandoHuella(true);
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen capturada por el lector biométrico.'));
+        reader.readAsDataURL(file);
+      });
+
+      const resp = await apiFetch('/api/tenant/hinchas/enrolar-huella', {
+        method: 'POST',
+        body: JSON.stringify({
+          rut: hinchaEncontrado.rutNormalizado,
+          hinchaId: hinchaEncontrado.hincha.id,
+          credentialId: `AFIS-${hinchaEncontrado.rutNormalizado}-${dedoParam}-${Date.now()}`,
+          publicKey: b64,
+          dispositivoTipo: 'Lector Físico AFIS / Dahua USB',
+          dedoIndice: dedoParam,
+        }),
+      });
+
+      setSuccessMsg(`¡Huella biométrica AFIS (${dedoParam}) extraída y guardada con éxito para ${hinchaEncontrado.hincha.nombres}!`);
+      await handleBuscarHincha(hinchaEncontrado.rutNormalizado, false);
+      cargarDatosTenant();
+    } catch (err) {
+      setSuccessMsg('');
+      setErrorMsg(err.message || 'Error procesando las minucias biométricas de la huella.');
+    } finally {
+      setEnrolandoHuella(false);
+    }
+  };
+
   const handleEnrolarHuellaDispositivo = async (dedoParam = 'INDICE_DERECHO') => {
     if (!hinchaEncontrado?.hincha) {
+      setSuccessMsg('');
       return setErrorMsg('Primero debes buscar un hincha por RUT para enrolarle la huella.');
     }
     const huellas = hinchaEncontrado.huellas || [];
     if (huellas.length >= 2) {
+      setSuccessMsg('');
       return setErrorMsg('El hincha ya tiene el límite máximo de 2 huellas enroladas. Elimina una de las huellas para registrar otra.');
     }
     setErrorMsg('');
+    setSuccessMsg('');
     setEnrolandoHuella(true);
     try {
       if (!window.PublicKeyCredential || !navigator.credentials?.create) {
@@ -210,14 +269,18 @@ export default function Administrador({ currentUser }) {
           rp: { name: 'Registro Nacional de Hinchas ANFP', id: window.location.hostname },
           user: {
             id: userId,
-            name: hinchaEncontrado.rutNormalizado,
-            displayName: `${hinchaEncontrado.hincha.nombres} ${hinchaEncontrado.hincha.apellidos || ''}`.trim(),
+            name: `${hinchaEncontrado.rutNormalizado}-${dedoParam}`,
+            displayName: `${hinchaEncontrado.hincha.nombres} (${dedoParam})`.trim(),
           },
           pubKeyCredParams: [
             { alg: -7, type: 'public-key' },
             { alg: -257, type: 'public-key' },
           ],
-          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            residentKey: 'discouraged',
+            userVerification: 'preferred',
+          },
           timeout: 60000,
         },
       });
@@ -242,17 +305,23 @@ export default function Administrador({ currentUser }) {
           hinchaId: hinchaEncontrado.hincha.id,
           credentialId: `FIDO2-${credId.substring(0, 30)}`,
           publicKey: pubKey,
-          dispositivoTipo: 'Sensor Biométrico FIDO2 / Dispositivo Oficial',
+          dispositivoTipo: 'Sensor Nativo WebAuthn FIDO2',
           dedoIndice: dedoParam,
         }),
       });
 
-      setSuccessMsg(`¡Huella biométrica (${dedoParam}) enrolada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
-      // Refrescar ficha del hincha
-      await handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+      setSuccessMsg(`¡Credencial WebAuthn (${dedoParam}) registrada exitosamente para ${hinchaEncontrado.hincha.nombres}!`);
+      await handleBuscarHincha(hinchaEncontrado.rutNormalizado, false);
       cargarDatosTenant();
     } catch (err) {
-      setErrorMsg(err.message || 'Error al capturar la huella biométrica.');
+      setSuccessMsg('');
+      if (err.name === 'NotAllowedError' || (err.message && err.message.includes('timed out or was not allowed'))) {
+        setErrorMsg(
+          'El navegador canceló, agotó el tiempo o no tiene sensor biométrico nativo (WebAuthn). Para comparar huellas y minucias reales (ej. Dahua / USB), usa la opción "Capturar Huella Lector Físico (AFIS)".'
+        );
+      } else {
+        setErrorMsg(err.message || 'Error al capturar la huella biométrica.');
+      }
     } finally {
       setEnrolandoHuella(false);
     }
@@ -263,14 +332,16 @@ export default function Administrador({ currentUser }) {
       return;
     }
     setErrorMsg('');
+    setSuccessMsg('');
     try {
       await apiFetch(`/api/tenant/hinchas/huellas/${huellaId}`, {
         method: 'DELETE',
       });
       setSuccessMsg(`¡${etiquetaHuella} eliminada con éxito!`);
-      await handleBuscarHincha(hinchaEncontrado.rutNormalizado);
+      await handleBuscarHincha(hinchaEncontrado.rutNormalizado, false);
       cargarDatosTenant();
     } catch (err) {
+      setSuccessMsg('');
       setErrorMsg(err.message || 'Error al eliminar la huella.');
     }
   };
@@ -603,17 +674,52 @@ export default function Administrador({ currentUser }) {
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Credential ID Huella (Opcional)
+                  {gateForm.modoVerificacion === 'CONTROL_PUERTA_HUELLA'
+                    ? 'Captura Lector AFIS / Credential ID Huella'
+                    : 'Credential ID Huella (Opcional)'}
                 </label>
-                <input
-                  type="text"
-                  value={gateForm.huellaCredentialId}
-                  onChange={(e) =>
-                    setGateForm({ ...gateForm, huellaCredentialId: e.target.value })
-                  }
-                  placeholder="FIDO2-CRED-ESTADIO-18543210K"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono"
-                />
+                {gateForm.modoVerificacion === 'CONTROL_PUERTA_HUELLA' ? (
+                  <div className="space-y-2">
+                    <label className="w-full cursor-pointer px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+                      <Fingerprint className="w-4 h-4" />
+                      {gateForm.capturaEnVivoBase64?.startsWith('data:image/')
+                        ? '✓ Captura Dactilar Lista para Cotejo AFIS'
+                        : 'Cargar / Leer Huella en Lector (PNG/BMP/WSQ)'}
+                      <input
+                        type="file"
+                        accept="image/*,.bmp,.wsq"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) =>
+                            setGateForm((prev) => ({ ...prev, capturaEnVivoBase64: ev.target.result }));
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    <input
+                      type="text"
+                      value={gateForm.huellaCredentialId}
+                      onChange={(e) =>
+                        setGateForm({ ...gateForm, huellaCredentialId: e.target.value })
+                      }
+                      placeholder="O pega Credential ID FIDO2..."
+                      className="w-full rounded-xl border border-slate-300 px-3 py-1.5 font-mono text-[11px]"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={gateForm.huellaCredentialId}
+                    onChange={(e) =>
+                      setGateForm({ ...gateForm, huellaCredentialId: e.target.value })
+                    }
+                    placeholder="FIDO2-CRED-ESTADIO-..."
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono"
+                  />
+                )}
               </div>
             </div>
 
@@ -940,7 +1046,7 @@ export default function Administrador({ currentUser }) {
                       )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-2">
                       {hinchaEncontrado.huellas?.[0] ? (
                         <button
                           type="button"
@@ -951,15 +1057,28 @@ export default function Administrador({ currentUser }) {
                           Eliminar Huella 1
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={enrolandoHuella}
-                          onClick={() => handleEnrolarHuellaDispositivo(dedoSlot1)}
-                          className="w-full py-2.5 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
-                        >
-                          <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
-                          {enrolandoHuella ? 'Sensor Encendido…' : 'Enrolar Huella 1'}
-                        </button>
+                        <>
+                          <label className={`w-full py-2.5 px-3 bg-purple-700 hover:bg-purple-800 ${enrolandoHuella ? 'opacity-60 pointer-events-none' : 'cursor-pointer'} text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition`}>
+                            <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                            {enrolandoHuella ? 'Extrayendo Minucias…' : 'Lector Físico / AFIS (Huella 1)'}
+                            <input
+                              type="file"
+                              accept="image/*,.bmp,.wsq,.bin"
+                              disabled={enrolandoHuella}
+                              onChange={(e) => handleEnrolarHuellaAfis(e, dedoSlot1)}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={enrolandoHuella}
+                            onClick={() => handleEnrolarHuellaDispositivo(dedoSlot1)}
+                            className="w-full py-2 bg-white hover:bg-purple-50 disabled:opacity-50 text-purple-700 border border-purple-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition"
+                          >
+                            <Fingerprint className="w-3.5 h-3.5" />
+                            Sensor Nativo Dispositivo (WebAuthn)
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1009,7 +1128,7 @@ export default function Administrador({ currentUser }) {
                       )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-2">
                       {hinchaEncontrado.huellas?.[1] ? (
                         <button
                           type="button"
@@ -1020,15 +1139,28 @@ export default function Administrador({ currentUser }) {
                           Eliminar Huella 2
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={enrolandoHuella}
-                          onClick={() => handleEnrolarHuellaDispositivo(dedoSlot2)}
-                          className="w-full py-2.5 bg-purple-700 hover:bg-purple-800 disabled:bg-purple-300 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
-                        >
-                          <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
-                          {enrolandoHuella ? 'Sensor Encendido…' : 'Enrolar Huella 2'}
-                        </button>
+                        <>
+                          <label className={`w-full py-2.5 px-3 bg-purple-700 hover:bg-purple-800 ${enrolandoHuella ? 'opacity-60 pointer-events-none' : 'cursor-pointer'} text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition`}>
+                            <Fingerprint className={`w-4 h-4 ${enrolandoHuella ? 'animate-pulse' : ''}`} />
+                            {enrolandoHuella ? 'Extrayendo Minucias…' : 'Lector Físico / AFIS (Huella 2)'}
+                            <input
+                              type="file"
+                              accept="image/*,.bmp,.wsq,.bin"
+                              disabled={enrolandoHuella}
+                              onChange={(e) => handleEnrolarHuellaAfis(e, dedoSlot2)}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={enrolandoHuella}
+                            onClick={() => handleEnrolarHuellaDispositivo(dedoSlot2)}
+                            className="w-full py-2 bg-white hover:bg-purple-50 disabled:opacity-50 text-purple-700 border border-purple-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition"
+                          >
+                            <Fingerprint className="w-3.5 h-3.5" />
+                            Sensor Nativo Dispositivo (WebAuthn)
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

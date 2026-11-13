@@ -45,6 +45,12 @@ public class HinchaPersistenceAdapter implements HinchaRepositoryPort {
     }
 
     @Override
+    public List<Hincha> findAllEnroladosConRostro() {
+        List<HinchaEntity> list = HinchaEntity.list("fotoRostroEncrypted is not null", Sort.by("id").descending());
+        return list.stream().map(this::toDomain).toList();
+    }
+
+    @Override
     @Transactional
     public Hincha save(Hincha domain, String vectorCifrado) {
         HinchaEntity entity = domain.getId() != null

@@ -3,7 +3,7 @@ import { ArrowRight, CircleCheck, ScanFace } from 'lucide-react';
 import { Boton, Contenedor } from './ui';
 
 /** Portada de Inicio: qué es, para qué sirve y una sola acción principal. */
-export default function Header({ onGoLogin, onGoRegister }) {
+export default function Header({ onGoLogin, onGoRegister, onCheckFace }) {
   return (
     <section className="border-b border-linea bg-superficie">
       <Contenedor className="grid items-center gap-10 py-10 sm:py-14 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:py-20">
@@ -16,9 +16,17 @@ export default function Header({ onGoLogin, onGoRegister }) {
             unos 3 minutos desde tu celular.
           </p>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Boton tamano="lg" onClick={onGoRegister} iconoFinal={<ArrowRight className="size-5" aria-hidden="true" />} className="sm:min-w-56">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Boton tamano="lg" onClick={onGoRegister} iconoFinal={<ArrowRight className="size-5" aria-hidden="true" />} className="sm:min-w-48">
               Registrarme
+            </Boton>
+            <Boton
+              variante="secundario"
+              tamano="lg"
+              onClick={onCheckFace}
+              icono={<ScanFace className="size-5 text-marca-700" aria-hidden="true" />}
+            >
+              ¿Cómo lo sé?
             </Boton>
             <Boton variante="texto" tamano="lg" onClick={onGoLogin}>
               Ya estoy registrado

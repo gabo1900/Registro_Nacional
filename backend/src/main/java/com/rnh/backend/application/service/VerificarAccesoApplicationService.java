@@ -150,31 +150,37 @@ public class VerificarAccesoApplicationService implements VerificarAccesoUseCase
         }
 
         // 3. Evaluación Biométrica (Facial o Huella Dactilar Hardware / FIDO2)
-        double score;
+        double score = 0.0;
         if ("CONTROL_PUERTA_HUELLA".equalsIgnoreCase(modo)) {
             List<HuellaBiometrica> huellas = hinchaRepository.findHuellasByUsuarioId(hincha.getUsuarioId());
-            if (huellas.isEmpty()) {
-                score = 0.0;
-            } else {
-                HuellaBiometrica h = huellas.get(0);
+            if (!huellas.isEmpty()) {
                 if (capturaEnVivoBase64 != null && !capturaEnVivoBase64.isBlank()) {
                     try {
-                        String cleanB64 = capturaEnVivoBase64.contains(",")
-                                ? capturaEnVivoBase64.substring(capturaEnVivoBase64.indexOf(",") + 1)
-                                : capturaEnVivoBase64;
-                        byte[] probeBytes = java.util.Base64.getDecoder().decode(cleanB64.trim());
-                        String storedTemplate = cryptoService.decryptAesGcm(h.getPublicKeyEncrypted());
-                        FingerprintVerificationService.FingerprintMatchResult matchRes =
-                                fingerprintVerificationService.cotejarHuellas(storedTemplate, probeBytes);
-                        score = matchRes.coincide() ? 0.992 : (matchRes.score() > 0 ? (matchRes.score() / 100.0) : 0.05);
+                        byte[] probeBytes = fingerprintVerificationService.decodeBase64Flexible(capturaEnVivoBase64);
+                        for (HuellaBiometrica h : huellas) {
+                            String storedTemplate = cryptoService.decryptAesGcm(h.getPublicKeyEncrypted());
+                            FingerprintVerificationService.FingerprintMatchResult matchRes =
+                                    fingerprintVerificationService.cotejarHuellas(storedTemplate, probeBytes);
+                            if (matchRes.coincide()) {
+                                score = 0.992;
+                                break;
+                            }
+                            double normalizedScore = matchRes.score() > 0 ? Math.min(0.80, matchRes.score() / 100.0) : 0.05;
+                            if (normalizedScore > score) {
+                                score = normalizedScore;
+                            }
+                        }
                     } catch (Exception e) {
                         score = 0.0;
                     }
                 } else if (huellaCredentialId != null && !huellaCredentialId.isBlank()) {
-                    // Verificación FIDO2 / WebAuthn
-                    score = h.getCredentialId().equals(huellaCredentialId.trim()) ? 0.994 : 0.0;
-                } else {
-                    score = 0.0;
+                    // Verificación FIDO2 / WebAuthn contra todas las huellas activas del hincha
+                    for (HuellaBiometrica h : huellas) {
+                        if (h.getCredentialId().equalsIgnoreCase(huellaCredentialId.trim())) {
+                            score = 0.994;
+                            break;
+                        }
+                    }
                 }
             }
         } else {
